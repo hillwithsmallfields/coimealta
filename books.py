@@ -1,11 +1,14 @@
 #!/usr/bin/env python
-
 import argparse
 from backports import csv
 import io
 import isbnlib
+import re
 
 fieldnames = ['Number','Title','Authors','Publisher','Year','ISBN','Area','Subject','Language','Source','Acquired','Read','Lent','Comments','webchecked']
+
+def canonicalize_title(raw_title):
+    return ' '.join(re.split("[ -:;,/]+", raw_title.lower()))
 
 def main():
     parser = argparse.ArgumentParser()
@@ -20,14 +23,13 @@ def main():
             books_writer = csv.DictWriter(output, fieldnames)
             books_writer.writeheader()
             for row in books_reader:
-                print "row is", row
                 if countdown > 0 and not row.get('webchecked', None):
-                    isbn = row.get('ISBN', None)
+                    isbn = str(row.get('ISBN', None))
+                    if len(isbn) == 9:
+                        isbn = "0" + isbn
                     if isbn:
                         countdown = countdown - 1
-                        print "countdown", countdown
                         new_isbn = isbnlib.to_isbn13(isbnlib.canonical(isbn))
-                        print "modified ISBN is", isbn
                         if new_isbn is None or new_isbn == "":
                             print "Could not canonicalize isbn", isbn
                         else:
@@ -41,9 +43,10 @@ def main():
                         except isbnlib._exceptions.NotValidISBNError:
                             print "Invalid ISBN", isbn, "for", row['Title']
                             row['webchecked'] = "Invalid ISBN"
+                        except isbnlib.dev._exceptions.ISBNNotConsistentError:
+                            print "Inconsistent data for",  row['Title']
+                            row['webchecked'] = "Inconsistent ISBN data"
                         if details:
-                            print "---"
-                            print "Details from web:", details
                             if details.get('ISBN-13', "") != "" and row.get('ISBN', "") == "":
                                 row['ISBN'] = details['ISBN-13']
                             if 'Authors' in row:
@@ -51,10 +54,12 @@ def main():
                             old_title = row['Title']
                             web_title = details['Title']
                             if old_title != web_title:
-                                old_len = len(old_title)
-                                web_len = len(web_title)
-                                if ((web_len > old_len and old_title in web_title)
-                                    or (web_len == old_len and old_title.lower() == web_title.lower())):
+                                old_canon = canonicalize_title(old_title)
+                                web_canon = canonicalize_title(web_title)
+                                old_len = len(old_canon)
+                                web_len = len(web_canon)
+                                if ((web_len > old_len and old_canon in web_canon)
+                                    or (web_len == old_len and old_canon == web_canon)):
                                     print "Title improvement from", old_title, "to", web_title
                                 else:
                                     print "Title discrepancy:", old_title, "in file,", web_title, "found online"
@@ -65,10 +70,7 @@ def main():
                                     row[key] = details[key]
                             if 'Authors' in row:
                                 row['Authors'] = '/'.join(row['Authors'])
-                            print "Combined data:", row
                             row['webchecked'] = "OK"
-                else:
-                    print "skipping lookup"
                 # from https://docs.python.org/2/library/csv.html
                 encoded_row = {k: (v.encode("utf-8") if isinstance(v, basestring) else v)
                                for k,v in row.iteritems()}
