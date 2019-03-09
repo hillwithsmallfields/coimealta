@@ -5,7 +5,14 @@ import io
 import isbnlib
 import re
 
-fieldnames = ['Number','Title','Authors','Publisher','Year','ISBN','Area','Subject','Language','Source','Acquired','Read','Lent','Comments','webchecked']
+fieldnames = ['Number', 'MediaType', 'Title',
+              'Authors','Publisher','Year','ISBN',
+              'Area','Subject','Language',
+              'Source','Acquired',
+              'Location',
+              'Read','Lent',
+              'Comments',
+              'webchecked']
 
 def canonicalize_title(raw_title):
     return ' '.join(re.split("[ -:;,/]+", raw_title.lower()))
