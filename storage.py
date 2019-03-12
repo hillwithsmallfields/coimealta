@@ -5,6 +5,12 @@ import io
 import os
 import re
 
+# todo: make searches case-insensitive
+# todo: try each name as a storage location name, and if found, list everything in that location
+# todo: option to print table of where all books are
+# todo: option to print table of where all inventory items are
+# todo: option to print table of all storage locations, with everything that is in them
+
 def read_books(books_file):
     books = {}
     with io.open(books_file, 'r', encoding='utf-8') as input:
