@@ -140,6 +140,7 @@ def main():
     elif args.list_locations:
         list_locations(locations)
     else:
+        # todo: collect up all the books/items matching all the "thing"s, eliminating duplicates, then output them, as currently if something matches more than one "thing", it appears more than once in the output
         for thing in args.things:
             if re.match("[0-9]+", thing):
                 as_location = describe_location(locations, thing)
