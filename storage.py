@@ -5,11 +5,6 @@ import io
 import os
 import re
 
-# todo: try each name as a storage location name, and if found, list everything in that location
-# todo: option to print table of where all books are
-# todo: option to print table of where all inventory items are
-# todo: option to print table of all storage locations, with everything that is in them
-
 def read_books(books_file):
     books = {}
     with io.open(books_file, 'r', encoding='utf-8') as input:
@@ -32,6 +27,10 @@ def books_matching(book_index, pattern):
     return [ book
              for book in book_index.values()
              if book_matches(book, pattern) ]
+
+def list_books(locations, books):
+    # todo: print table of where all books are
+    pass
 
 def read_inventory(inventory_file):
     inventory = {}
@@ -57,6 +56,10 @@ def items_matching(inventory_index, pattern):
     return [ item
              for item in inventory_index.values()
              if item_matches(item, pattern) ]
+
+def list_items(locations, items):
+    # todo: option to print table of where all inventory items are
+    pass
 
 def read_locations(locations_file):
     locations = {}
@@ -92,7 +95,11 @@ def nested_location(locations, location):
     return result
 
 def describe_location(locations, location):
-    return " which is in ".join(nested_location(locations, location))
+    return " which is in ".join(nested_location(locations, location)) if location != "" else "unknown"
+
+def list_locations(locations):
+    # todo: option to print table of all storage locations, with everything that is in them
+    pass
 
 def main():
     parser = argparse.ArgumentParser()
@@ -106,6 +113,12 @@ def main():
     parser.add_argument("--inventory", "-i",
                         default=os.path.join(org_files, "inventory.csv"),
                         help="""The CSV file containing the inventory.""")
+    parser.add_argument("--list-books", action='store_true',
+                        help="""List all the books.""")
+    parser.add_argument("--list-items", action='store_true',
+                        help="""List all the inventory items.""")
+    parser.add_argument("--list-locations", action='store_true',
+                        help="""List all the storage locations.""")
     parser.add_argument("things",
                         nargs='+',
                         help="""The things to look for.""")
@@ -113,20 +126,28 @@ def main():
     locations = read_locations(args.locations)
     inventory = read_inventory(args.inventory)
     books = read_books(args.books)
-    for thing in args.things:
-        if re.match("[0-9]+", thing):
-            as_location = describe_location(locations, thing)
-            if as_location != []:
-                print "as location:", as_location
-            # todo: also look up books and items by number
-        for book in books_matching(books, thing):
-            shelf = book['Location']
-            where = describe_location(locations, shelf) if shelf != "" else "unknown"
-            print "book:", book['Title'], "is on", where
-        for item in items_matching(inventory, thing):
-            shelf = item['Normal_location']
-            where = describe_location(locations, shelf) if shelf != "" else "unknown"
-            print "item:", item['Item'], "is in", where
+    if args.list_books:
+        list_books(locations, books)
+    elif args.list_items:
+        list_items(locations, items)
+    elif args.list_locations:
+        list_locations(locations)
+    else:
+        for thing in args.things:
+            if re.match("[0-9]+", thing):
+                as_location = describe_location(locations, thing)
+                if as_location != []:
+                    print "as location:", as_location
+                # todo: also look up books and items by number
+            for book in books_matching(books, thing):
+                shelf = book['Location']
+                where = describe_location(locations, shelf)
+                print "book:", book['Title'], "is on", where
+            for item in items_matching(inventory, thing):
+                shelf = item['Normal_location']
+                where = describe_location(locations, shelf)
+                print "item:", item['Item'], "is in", where
+            # todo: try each name as a storage location name, and if found, list everything in that location
 
 if __name__ == "__main__":
     main()
