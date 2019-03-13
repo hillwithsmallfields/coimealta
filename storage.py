@@ -78,7 +78,15 @@ def nested_location(locations, location):
         if location not in locations:
             break
         where = locations[location]
-        result.append(where['Description'])
+        description = where['Description']
+        level = where['Level']
+        if level != "":
+            description += " "
+            if re.match("[0-9]+", level):
+                description += "level " + level
+            else:
+                description += level
+            result.append(description)
         location = where['ContainedWithin']
     return result
 
