@@ -90,7 +90,7 @@ def nested_location(locations, location):
                 description += "level " + level
             else:
                 description += level
-            result.append(description)
+        result.append(description)
         location = where['ContainedWithin']
     return result
 
