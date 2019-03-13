@@ -90,12 +90,19 @@ def nested_location(locations, location):
                 description += "level " + level
             else:
                 description += level
+        storage_type = where['Type']
+        if storage_type not in ("", "room", "building"):
+            if (storage_type == "shelf"
+                and not re.search("shelves", description)):
+                description += " " + storage_type
         result.append(description)
         location = where['ContainedWithin']
     return result
 
 def describe_location(locations, location):
-    return " which is in ".join(nested_location(locations, location)) if location != "" else "unknown"
+    return (" which is in ".join(nested_location(locations, location))
+            if location != ""
+            else "unknown")
 
 def list_locations(locations):
     # todo: option to print table of all storage locations, with everything that is in them
