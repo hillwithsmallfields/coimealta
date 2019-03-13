@@ -5,7 +5,6 @@ import io
 import os
 import re
 
-# todo: make searches case-insensitive
 # todo: try each name as a storage location name, and if found, list everything in that location
 # todo: option to print table of where all books are
 # todo: option to print table of where all inventory items are
@@ -22,11 +21,12 @@ def read_books(books_file):
     return books
 
 def book_matches(book, pattern):
-    return (re.search(pattern, book['Title'])
-            or re.search(pattern, book['Authors'])
-            or re.search(pattern, book['Publisher'])
-            or re.search(pattern, book['ISBN'])
-            or re.search(pattern, book['Area']))
+    pattern = re.compile(pattern , re.IGNORECASE)
+    return (pattern.search(book['Title'])
+            or pattern.search(book['Authors'])
+            or pattern.search(book['Publisher'])
+            or pattern.search(book['ISBN'])
+            or pattern.search(book['Area']))
 
 def books_matching(book_index, pattern):
     return [ book
@@ -48,9 +48,10 @@ def read_inventory(inventory_file):
     return inventory
 
 def item_matches(item, pattern):
-    return (re.search(pattern, item['Item'])
-            or re.search(pattern, item['Type'])
-            or re.search(pattern, item['Subtype']))
+    pattern = re.compile(pattern , re.IGNORECASE)
+    return (pattern.search(item['Item'])
+            or pattern.search(item['Type'])
+            or pattern.search(item['Subtype']))
 
 def items_matching(inventory_index, pattern):
     return [ item
