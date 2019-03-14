@@ -2,6 +2,7 @@
 import argparse
 from backports import csv
 import io
+import operator
 import os
 import re
 
@@ -104,6 +105,28 @@ def describe_location(locations, location):
             if location != ""
             else "unknown")
 
+def analyze_locations(locations):
+    capacities = {}
+    for location in locations.values():
+        loctype = location['Type'].lower()
+        locsize = location['Size'].lower()
+        if loctype != "" and locsize != "":
+            capacities[loctype] = float(capacities.get(loctype, 0)) + float(locsize)
+    for loctype in sorted(capacities.keys()):
+        print loctype, capacities[loctype]
+    volume = reduce(operator.add,
+                    map(lambda loctype: capacities.get(loctype, 0),
+                        ('box', 'crate', 'drawer', 'cupboard')))
+    length = reduce(operator.add,
+                    map(lambda loctype: capacities.get(loctype, 0),
+                        ('shelf', 'shelves', 'cupboard shelf', 'racklevel')))
+    area = reduce(operator.add,
+                  map(lambda loctype: capacities.get(loctype, 0),
+                        ('louvre panel', 'pegboard')))
+    print "Total container volume:", volume, "litres"
+    print "Total shelving length:", length, "metres"
+    print "Total panel area:", area, "square metres"
+
 def list_locations(locations):
     # todo: option to print table of all storage locations, with everything that is in them
     pass
@@ -126,13 +149,17 @@ def main():
                         help="""List all the inventory items.""")
     parser.add_argument("--list-locations", action='store_true',
                         help="""List all the storage locations.""")
+    parser.add_argument("--analyze", action='store_true',
+                        help="""Analyze the storage.""")
     parser.add_argument("things",
-                        nargs='+',
+                        nargs='*',
                         help="""The things to look for.""")
     args = parser.parse_args()
     locations = read_locations(args.locations)
     inventory = read_inventory(args.inventory)
     books = read_books(args.books)
+    if args.analyze:
+        analyze_locations(locations)
     if args.list_books:
         list_books(locations, books)
     elif args.list_items:
