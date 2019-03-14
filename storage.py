@@ -113,7 +113,7 @@ def analyze_locations(locations):
         if loctype != "" and locsize != "":
             capacities[loctype] = float(capacities.get(loctype, 0)) + float(locsize)
     for loctype in sorted(capacities.keys()):
-        print loctype, capacities[loctype]
+        print loctype.rjust(max(*map(len, capacities.keys()))), capacities[loctype]
     volume = reduce(operator.add,
                     map(lambda loctype: capacities.get(loctype, 0),
                         ('box', 'crate', 'drawer', 'cupboard')))
