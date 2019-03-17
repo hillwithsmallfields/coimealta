@@ -83,7 +83,7 @@ def nested_location(locations, location):
         if location not in locations:
             break
         where = locations[location]
-        description = where['Description']
+        description = where['Description'].lower()
         level = where['Level']
         if level != "":
             description += " "
@@ -92,16 +92,20 @@ def nested_location(locations, location):
             else:
                 description += level
         storage_type = where['Type']
-        if storage_type not in ("", "room", "building"):
-            if (storage_type == "shelf"
-                and not re.search("shelves", description)):
-                description += " " + storage_type
+        if storage_type != "":
+            if storage_type in ("room", "building"):
+                description = "the " + description
+            else:
+                if (storage_type == "shelf"
+                    and not re.search("shelves", description)):
+                    description += " " + storage_type
+        description = ("on " if storage_type == "shelf" else "in ") + description
         result.append(description)
         location = where['ContainedWithin']
     return result
 
 def describe_location(locations, location):
-    return (" which is in ".join(nested_location(locations, location))
+    return (" which is ".join(nested_location(locations, location))
             if location != ""
             else "unknown")
 
@@ -181,7 +185,7 @@ def main():
             for item in items_matching(inventory, thing):
                 shelf = item['Normal_location']
                 where = describe_location(locations, shelf)
-                print "item:", item['Item'], "is in", where
+                print "item:", item['Item'], "is", where
             # todo: try each name as a storage location name, and if found, list everything in that location
 
 if __name__ == "__main__":
