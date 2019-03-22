@@ -14,7 +14,13 @@ def read_books(books_file):
         for row in books_reader:
             ex_libris = row['Number']
             if ex_libris != "":
-                books[int(ex_libris)] = row
+                ex_libris = int(ex_libris)
+                row['Number'] = ex_libris
+                books[ex_libris] = row
+            location = row['Location']
+            if location != "":
+                location = int(location)
+                row['Location'] = location
     return books
 
 def book_matches(book, pattern):
@@ -43,10 +49,16 @@ def read_inventory(inventory_file):
         for row in inventory_reader:
             label_number = row['Label number']
             if label_number != "":
-                inventory[int(label_number)] = row
+                label_number = int(label_number)
+                row['Label number'] = label_number
+                inventory[label_number] = row
             else:
                 inventory[unlabelled] = row
                 unlabelled -= 1
+            normal_location = row['Normal_location']
+            if normal_location != "":
+                normal_location = int(normal_location)
+                row['Normal_location'] = normal_location
     return inventory
 
 def item_matches(item, pattern):
@@ -76,9 +88,45 @@ def read_locations(locations_file):
                                       else None)
             number = row['Number']
             if number != "":
-                row['Number'] = number
+                row['Number'] = int(number)
                 locations[int(number)] = row
     return locations
+
+def locations_matching(locations_index, pattern):
+    """Return a list of location numbers for locations that match a regexp."""
+    pattern = re.compile(pattern, re.IGNORECASE)
+    return [ loc['Number']
+             for loc in locations_index.values()
+             if pattern.search(loc['Description']) ]
+
+def locations_matching_patterns(locations_index, patterns):
+    """Return a set of location numbers for locations that match any of a list of regexps."""
+    result = set()
+    for pattern in patterns:
+        for loc in locations_matching(locations_index, pattern):
+            result.add(loc)
+    return result
+
+def describe_location(where):
+    """Return a description of a location."""
+    description = where['Description'].lower()
+    level = where['Level']
+    if level != "":
+        description += " "
+        if re.match("[0-9]+", level):
+            description += "level " + level
+        else:
+            description += level
+    storage_type = where['Type']
+    if storage_type != "":
+        if storage_type in ("room", "building"):
+            description = "the " + description
+        else:
+            if (storage_type == "shelf"
+                and not re.search("shelves", description)):
+                description += " " + storage_type
+    description = ("on " if storage_type == "shelf" else "in ") + description
+    return description
 
 def nested_location(locations, location):
     result = []
@@ -87,28 +135,13 @@ def nested_location(locations, location):
         if location not in locations:
             break
         where = locations[location]
-        description = where['Description'].lower()
-        level = where['Level']
-        if level != "":
-            description += " "
-            if re.match("[0-9]+", level):
-                description += "level " + level
-            else:
-                description += level
-        storage_type = where['Type']
-        if storage_type != "":
-            if storage_type in ("room", "building"):
-                description = "the " + description
-            else:
-                if (storage_type == "shelf"
-                    and not re.search("shelves", description)):
-                    description += " " + storage_type
-        description = ("on " if storage_type == "shelf" else "in ") + description
+        description = describe_location(where)
         result.append(description)
         location = where['ContainedWithin']
     return result
 
-def describe_location(locations, location):
+def describe_nested_location(locations, location):
+    """Return a description of a location, along with any surrounding locations."""
     return (" which is ".join(nested_location(locations, location))
             if location != ""
             else "unknown")
@@ -159,39 +192,39 @@ def add_contained_storage(matching_locations, locations, surrounders, loc_number
 
 surrounders = None
 
+def list_location(outstream, location, prefix, locations, items, books):
+    """List everything that is in the given location."""
+    if type(location) == dict:
+        location = location['Number']
+    directly_contained_items = [
+        item for item in items.values()
+        if item['Normal_location'] == location ]
+    directly_contained_books = [
+        book for book in books.values()
+        if book['Location'] == location ]
+    sub_locations = [
+        subloc for subloc in locations.values()
+        if subloc['ContainedWithin'] == location ]
+    description = describe_location(locations[location])
+    next_prefix = prefix + "    "
+    if len(directly_contained_items) > 0:
+        outstream.write(prefix + "Items directly " + description + ":\n")
+        for item in directly_contained_items:
+            outstream.write(next_prefix + item['Item'] + "\n")
+    if len(directly_contained_books) > 0:
+        outstream.write(prefix + "Books directly " + description + ":\n")
+        for book in directly_contained_books:
+            outstream.write(next_prefix + book['Title'] + "\n")
+    if len(sub_locations) > 0:
+        outstream.write(prefix + "Locations " + description + ":\n")
+        for subloc in sub_locations:
+            outstream.write(next_prefix + subloc['Description'] + "\n")
+            list_location(outstream, subloc, next_prefix, locations, items, books)
+
 def list_locations(outstream, things, locations, items, books):
-    """List everything that is in the matching locations.
-When complete, this should list them hierarchically."""
-    global surrounders
-    # todo: make this list things hierarchically (as it goes, in one loop, instead of saving all up for the end)
-    if surrounders is None:
-        surrounders = construct_surrounders(locations)
-    matching_locations = {}
-    for loc_name in things:
-        loc_match = re.compile(loc_name, re.IGNORECASE)
-        for loc in locations.values():
-            if loc_match.search(loc['Description']):
-                loc_number = int(loc['Number'])
-                matching_locations[loc_number] = loc
-                add_contained_storage(matching_locations, locations, surrounders, loc_number)
-    for loc_number in sorted(matching_locations.keys()):
-        things_here = []
-        for thing in items.values():
-            if thing['Normal_location'] == loc_number:
-                things_here.append(thing)
-        # todo: add books
-        location = matching_locations[loc_number]
-        description = location['Description']
-        level = location['Level']
-        if level != "":
-            description += " level " + str(level)
-        if len(things_here) == 0:
-            outstream.write(description + " has no known direct contents\n")
-        else:
-            outstream.write(description + " contains\n")
-            for what in things_here:
-                outstream.write("    " + what['Item'] + "\n")
-    return True
+    """List everything that is in the matching locations."""
+    for where in locations_matching_patterns(locations, things):
+        list_location(outstream, where, "", locations, items, books)
 
 def find_things(outstream, args, locations, items, books):
     """Show the locations of things.
@@ -199,13 +232,13 @@ This finds books, other items, and locations."""
     findings = {}
     for thing in args:
         if re.match("[0-9]+", thing):
-            as_location = describe_location(locations, thing)
+            as_location = describe_nested_location(locations, thing)
             if as_location != []:
                 findings[thing] = as_location
         for book in books_matching(books, thing):
-            findings[book['Title']] = describe_location(locations, book['Location'])
+            findings[book['Title']] = describe_nested_location(locations, book['Location'])
         for item in items_matching(items, thing):
-            findings[item['Item']] = describe_location(locations, item['Normal_location'])
+            findings[item['Item']] = describe_nested_location(locations, item['Normal_location'])
     for finding in sorted(findings.keys()):
         outstream.write(finding + " is " + findings[finding] + "\n")
     return True
