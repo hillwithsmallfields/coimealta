@@ -2,6 +2,7 @@
 import argparse
 from backports import csv
 import io
+import json
 import operator
 import os
 import re
@@ -77,6 +78,20 @@ def list_items(outstream, args, locations, items, books):
     # todo: option to print table of where all inventory items are
     return True
 
+def name_completions(outstream, things, locations, items, books):
+    """Return the names matching a fragment."""
+    if len(things) == 0:
+        return ""
+    fragment = things[0]
+    outstream.write(json.dumps(sorted(
+        [ book['Title']
+          for book in books.values()
+          if fragment in book['Title'] ]
+        + [ item['Item']
+            for item in items.values()
+            if fragment in item['Item'] ]))
+                    + "\n")
+    
 def read_locations(locations_file):
     locations = {}
     with io.open(locations_file, 'r', encoding='utf-8') as input:
@@ -226,6 +241,17 @@ def list_locations(outstream, things, locations, items, books):
     for where in locations_matching_patterns(locations, things):
         list_location(outstream, where, "", locations, items, books)
 
+def location_completions(outstream, things, locations, items, books):
+    """Return the location names matching a fragment."""
+    if len(things) == 0:
+        return ""
+    fragment = things[0]
+    outstream.write(json.dumps(sorted(
+        [ location['Description']
+          for location in locations.values()
+          if fragment in location['Description'] ]))
+                    + "\n")
+
 def find_things(outstream, args, locations, items, books):
     """Show the locations of things.
 This finds books, other items, and locations."""
@@ -270,13 +296,15 @@ def cmd_bad(outstream, args, locations, items, books):
     return True
 
 commands = {
-    'where': find_things,
-    'items': list_items,
     'books': list_books,
-    'what': list_locations,
     'capacities': capacities,
     'help': cmd_help,
-    'quit': cmd_quit
+    'items': list_items,
+    'names': name_completions,
+    'places': location_completions,
+    'quit': cmd_quit,
+    'what': list_locations,
+    'where': find_things
 }
 
 def run_command(outstream,
