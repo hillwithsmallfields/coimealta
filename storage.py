@@ -161,6 +161,25 @@ def describe_nested_location(locations, location):
             if location != ""
             else "unknown")
 
+def counts(outstream, args, locations, items, books):
+    """Count how many of each type of thing I have."""
+    types = {}
+    for item in items.values():
+        item_type = item['Type']
+        if item_type not in types:
+            types[item_type] = {}
+        subtypes = types[item_type]
+        item_subtype = item['Subtype']
+        if item_subtype in subtypes:
+            subtypes[item_subtype] += 1
+        else:
+            subtypes[item_subtype] = 1
+    for item_type in sorted(types.keys()):
+        subtypes = types[item_type]
+        print item_type if item_type != "" else "unspecified", reduce(operator.add, subtypes.values())
+        for subtype in sorted(subtypes.keys ()):
+            print "    ", subtype if subtype != "" else "unspecified", subtypes[subtype]
+            
 def capacities(outstream, args, locations, items, books):
     """Analyze the storage capacities.
 Shows how much of each type of storage there is, and also a summary
@@ -298,6 +317,7 @@ def cmd_bad(outstream, args, locations, items, books):
 commands = {
     'books': list_books,
     'capacities': capacities,
+    'counts': counts,
     'help': cmd_help,
     'items': list_items,
     'names': name_completions,
