@@ -56,10 +56,10 @@ def read_inventory(inventory_file):
             else:
                 inventory[unlabelled] = row
                 unlabelled -= 1
-            normal_location = row['Normal_location']
+            normal_location = row['Normal location']
             if normal_location != "":
                 normal_location = int(normal_location)
-                row['Normal_location'] = normal_location
+                row['Normal location'] = normal_location
     return inventory
 
 def item_matches(item, pattern):
@@ -232,7 +232,7 @@ def list_location(outstream, location, prefix, locations, items, books):
         location = location['Number']
     directly_contained_items = [
         item for item in items.values()
-        if item['Normal_location'] == location ]
+        if item['Normal location'] == location ]
     directly_contained_books = [
         book for book in books.values()
         if book['Location'] == location ]
@@ -283,7 +283,7 @@ This finds books, other items, and locations."""
         for book in books_matching(books, thing):
             findings[book['Title']] = describe_nested_location(locations, book['Location'])
         for item in items_matching(items, thing):
-            findings[item['Item']] = describe_nested_location(locations, item['Normal_location'])
+            findings[item['Item']] = describe_nested_location(locations, item['Normal location'])
     for finding in sorted(findings.keys()):
         outstream.write(finding + " is " + findings[finding] + "\n")
     return True
