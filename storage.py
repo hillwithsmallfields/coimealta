@@ -57,7 +57,7 @@ def read_inventory(inventory_file):
                 inventory[unlabelled] = row
                 unlabelled -= 1
             normal_location = row['Normal location']
-            if normal_location != "":
+            if normal_location and re.match("[0-9]+", normal_location):
                 normal_location = int(normal_location)
                 row['Normal location'] = normal_location
     return inventory
@@ -65,8 +65,8 @@ def read_inventory(inventory_file):
 def item_matches(item, pattern):
     pattern = re.compile(pattern , re.IGNORECASE)
     return (pattern.search(item['Item'])
-            or pattern.search(item['Type'])
-            or pattern.search(item['Subtype']))
+            or (item['Type'] and pattern.search(item['Type']))
+            or (item['Subtype'] and pattern.search(item['Subtype'])))
 
 def items_matching(inventory_index, pattern):
     return [ item
@@ -91,7 +91,7 @@ def name_completions(outstream, things, locations, items, books):
             for item in items.values()
             if fragment in item['Item'] ]))
                     + "\n")
-    
+
 def read_locations(locations_file):
     locations = {}
     with io.open(locations_file, 'r', encoding='utf-8') as input:
@@ -179,7 +179,7 @@ def counts(outstream, args, locations, items, books):
         print item_type if item_type != "" else "unspecified", reduce(operator.add, subtypes.values())
         for subtype in sorted(subtypes.keys ()):
             print "    ", subtype if subtype != "" else "unspecified", subtypes[subtype]
-            
+
 def capacities(outstream, args, locations, items, books):
     """Analyze the storage capacities.
 Shows how much of each type of storage there is, and also a summary
