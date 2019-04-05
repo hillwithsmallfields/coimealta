@@ -8,21 +8,23 @@ import os
 import re
 import sys
 
+def normalize_book_entry(row):
+    ex_libris = row['Number']
+    if ex_libris != "":
+        ex_libris = int(ex_libris)
+        row['Number'] = ex_libris
+    location = row['Location']
+    if location != "":
+        location = int(location)
+        row['Location'] = location
+    return row
+
 def read_books(books_file):
-    books = {}
     with io.open(books_file, 'r', encoding='utf-8') as input:
-        books_reader = csv.DictReader(input)
-        for row in books_reader:
-            ex_libris = row['Number']
-            if ex_libris != "":
-                ex_libris = int(ex_libris)
-                row['Number'] = ex_libris
-                books[ex_libris] = row
-            location = row['Location']
-            if location != "":
-                location = int(location)
-                row['Location'] = location
-    return books
+        return { book['Number']: book
+                 for book in map(normalize_book_entry, [row
+                                                        for row in csv.DictReader(input)])
+                 if book['Number'] != "" }
 
 def book_matches(book, pattern):
     pattern = re.compile(pattern , re.IGNORECASE)
@@ -42,25 +44,31 @@ def list_books(outstream, args, locations, items, books):
     # todo: print table of where all books are
     return True
 
+unlabelled = -1
+
+def normalize_item_entry(row):
+    global unlabelled
+    label_number = row['Label number']
+    if label_number != "":
+        label_number = int(label_number)
+        row['Label number'] = label_number
+    else:
+        row['Label number'] = unlabelled
+        unlabelled -= 1
+    normal_location = row['Normal location']
+    if normal_location and re.match("[0-9]+", normal_location):
+        normal_location = int(normal_location)
+        row['Normal location'] = normal_location
+    return row
+
 def read_inventory(inventory_file):
-    inventory = {}
+    global unlabelled
     unlabelled = -1
     with io.open(inventory_file, 'r', encoding='utf-8') as input:
-        inventory_reader = csv.DictReader(input)
-        for row in inventory_reader:
-            label_number = row['Label number']
-            if label_number != "":
-                label_number = int(label_number)
-                row['Label number'] = label_number
-                inventory[label_number] = row
-            else:
-                inventory[unlabelled] = row
-                unlabelled -= 1
-            normal_location = row['Normal location']
-            if normal_location and re.match("[0-9]+", normal_location):
-                normal_location = int(normal_location)
-                row['Normal location'] = normal_location
-    return inventory
+        return { item['Label number']: item
+                 for item in map(normalize_item_entry,
+                                 [ row
+                                   for row in csv.DictReader(input) ])}
 
 def item_matches(item, pattern):
     pattern = re.compile(pattern , re.IGNORECASE)
@@ -92,20 +100,21 @@ def name_completions(outstream, things, locations, items, books):
             if fragment in item['Item'] ]))
                     + "\n")
 
+def normalize_location(row):
+    contained_within = row['ContainedWithin']
+    row['ContainedWithin'] = (int(contained_within)
+                              if contained_within != ""
+                              else None)
+    number = row['Number']
+    row['Number'] = int(number) if number != "" else None
+    return row
+
 def read_locations(locations_file):
-    locations = {}
     with io.open(locations_file, 'r', encoding='utf-8') as input:
-        storage_reader = csv.DictReader(input)
-        for row in storage_reader:
-            contained_within = row['ContainedWithin']
-            row['ContainedWithin'] = (int(contained_within)
-                                      if contained_within != ""
-                                      else None)
-            number = row['Number']
-            if number != "":
-                row['Number'] = int(number)
-                locations[int(number)] = row
-    return locations
+        return { location['Number']: location
+                 for location in map(normalize_location, [ row
+                                                           for row in csv.DictReader(input) ])
+                 if row['Number'] is not None}
 
 def locations_matching(locations_index, pattern):
     """Return a list of location numbers for locations that match a regexp."""
