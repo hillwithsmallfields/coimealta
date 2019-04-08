@@ -48,7 +48,7 @@ unlabelled = -1
 
 def normalize_item_entry(row):
     global unlabelled
-    label_number = row['Label number']
+    label_number = row.get('Label number', "")
     if label_number != "":
         label_number = int(label_number)
         row['Label number'] = label_number
@@ -62,13 +62,14 @@ def normalize_item_entry(row):
     return row
 
 def read_inventory(inventory_file):
-    global unlabelled
-    unlabelled = -1
-    with io.open(inventory_file, 'r', encoding='utf-8') as input:
-        return { item['Label number']: item
-                 for item in map(normalize_item_entry,
-                                 [ row
-                                   for row in csv.DictReader(input) ])}
+    if os.path.exists(inventory_file):
+        with io.open(inventory_file, 'r', encoding='utf-8') as input:
+            return { item['Label number']: item
+                     for item in map(normalize_item_entry,
+                                     [ row
+                                       for row in csv.DictReader(input) ])}
+    else:
+        return {}
 
 def item_matches(item, pattern):
     pattern = re.compile(pattern , re.IGNORECASE)
@@ -373,7 +374,13 @@ def main():
                         help="""The CSV file containing the book catalogue.""")
     parser.add_argument("--inventory", "-i",
                         default=os.path.join(org_files, "inventory.csv"),
-                        help="""The CSV file containing the inventory.""")
+                        help="""The CSV file containing the general inventory.""")
+    parser.add_argument("--stock", "-s",
+                        default=os.path.join(org_files, "stock.csv"),
+                        help="""The CSV file containing the stock material inventory.""")
+    parser.add_argument("--project-parts", "-p",
+                        default=os.path.join(org_files, "project-parts.csv"),
+                        help="""The CSV file containing the project parts inventory.""")
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument("--server", action='store_true',
                         help="""Run a little CLI on a network socket.""")
@@ -385,6 +392,8 @@ def main():
     args = parser.parse_args()
     locations = read_locations(args.locations)
     items = read_inventory(args.inventory)
+    items.update(read_inventory(args.stock))
+    items.update(read_inventory(args.project_parts))
     books = read_books(args.books)
     if args.cli:
         cli(sys.stdin, sys.stdout, "storage> ", locations, items, books)
