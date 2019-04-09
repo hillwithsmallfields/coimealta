@@ -50,16 +50,22 @@ repeatedly about books it doesn't know about.
 Files
 =====
 
-By default, the inventory files are called `$ORG/inventory.csv` and
-`$ORG/books.csv`, and the locations file is called `$ORG/storage.csv`.
+By default, the inventory files are called `$ORG/inventory.csv`,
+`$ORG/stock.csv`, `$ORG/project-parts.csv` and `$ORG/books.csv`, and
+the locations file is called `$ORG/storage.csv`.
 
-`inventory.csv` is expected to have these columns:
+`inventory.csv`, `stock.csv`, and `project-parts.csv` are expected to
+have these columns:
 
   - Label number
-  - Item
-  - Type
-  - Subtype
-  - Normal location
+  - *Item*
+  - *Type*
+  - *Subtype*
+  - *Normal location*
+
+I also have the following columns in mine, but the software doesn't
+currently use them:
+
   - Origin
   - Acquired
   - Brand
@@ -76,7 +82,8 @@ By default, the inventory files are called `$ORG/inventory.csv` and
 serial-numbered barcoded name labels on all my non-trivial non-fabric
 items, and on the coat-hangers for major clothing items.
 
-As the code never writes this file back, this is not a strict list.
+As the code never writes this file back, this is not a strict list,
+but `storage.py` assumes the fields listed in bold are present.
 
 `books.csv` is expected to have these columns:
 
@@ -130,7 +137,7 @@ for example, a box may be on a shelf, which is in a room, which is in
 a building.
 
 `Variety` lets you enter things like colour, and `Size`, if in actual
-units (litres/metres) it can be used by the `capacities` command
-of storage.py.  Also, they should help you spot things quickly, such
-as `35L red box`.
+units (such as litres or metres) it can be used by the `capacities`
+command of storage.py.  Also, they should help you spot things
+quickly, such as `35L red box`.
 
