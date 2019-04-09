@@ -22,8 +22,8 @@ def normalize_book_entry(row):
 def read_books(books_file):
     with io.open(books_file, 'r', encoding='utf-8') as input:
         return { book['Number']: book
-                 for book in map(normalize_book_entry, [row
-                                                        for row in csv.DictReader(input)])
+                 for book in [normalize_book_entry(row)
+                              for row in csv.DictReader(input)]
                  if book['Number'] != "" }
 
 def book_matches(book, pattern):
@@ -113,8 +113,8 @@ def normalize_location(row):
 def read_locations(locations_file):
     with io.open(locations_file, 'r', encoding='utf-8') as input:
         return { location['Number']: location
-                 for location in map(normalize_location, [ row
-                                                           for row in csv.DictReader(input) ])
+                 for location in [ normalize_location(row)
+                                   for row in csv.DictReader(input) ]
                  if row['Number'] is not None}
 
 def locations_matching(locations_index, pattern):
