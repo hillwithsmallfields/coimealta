@@ -141,3 +141,5 @@ units (such as litres or metres) it can be used by the `capacities`
 command of storage.py.  Also, they should help you spot things
 quickly, such as `35L red box`.
 
+I might add a column for two- or three-dimensional coordinates, to
+allow display of a location on a floorplan or 3D model.
