@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import argparse
-from backports import csv
+import csv
 import io
 import json
 import operator
@@ -20,10 +20,10 @@ def normalize_book_entry(row):
     return row
 
 def read_books(books_file):
-    with io.open(books_file, 'r', encoding='utf-8') as input:
+    with io.open(books_file, 'r', encoding='utf-8') as instream:
         return { book['Number']: book
                  for book in [normalize_book_entry(row)
-                              for row in csv.DictReader(input)]
+                              for row in csv.DictReader(instream)]
                  if book['Number'] != "" }
 
 def book_matches(book, pattern):
@@ -63,11 +63,11 @@ def normalize_item_entry(row):
 
 def read_inventory(inventory_file):
     if os.path.exists(inventory_file):
-        with io.open(inventory_file, 'r', encoding='utf-8') as input:
+        with io.open(inventory_file, 'r', encoding='utf-8') as instream:
             return { item['Label number']: item
                      for item in map(normalize_item_entry,
                                      [ row
-                                       for row in csv.DictReader(input) ])}
+                                       for row in csv.DictReader(instream) ])}
     else:
         return {}
 
@@ -111,11 +111,11 @@ def normalize_location(row):
     return row
 
 def read_locations(locations_file):
-    with io.open(locations_file, 'r', encoding='utf-8') as input:
+    with io.open(locations_file, 'r', encoding='utf-8') as instream:
         return { location['Number']: location
                  for location in [ normalize_location(row)
-                                   for row in csv.DictReader(input) ]
-                 if row['Number'] is not None}
+                                   for row in csv.DictReader(instream)
+                                   if row['Number'] is not None ] }
 
 def locations_matching(locations_index, pattern):
     """Return a list of location numbers for locations that match a regexp."""
@@ -186,9 +186,9 @@ def counts(outstream, args, locations, items, books):
             subtypes[item_subtype] = 1
     for item_type in sorted(types.keys()):
         subtypes = types[item_type]
-        print item_type if item_type != "" else "unspecified", reduce(operator.add, subtypes.values())
+        print (item_type if item_type != "" else "unspecified", reduce(operator.add, subtypes.values()))
         for subtype in sorted(subtypes.keys ()):
-            print "    ", subtype if subtype != "" else "unspecified", subtypes[subtype]
+            print ("    ", subtype if subtype != "" else "unspecified", subtypes[subtype])
 
 def capacities(outstream, args, locations, items, books):
     """Analyze the storage capacities.
