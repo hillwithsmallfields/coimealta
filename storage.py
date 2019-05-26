@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse
+import client_server # the shell script ./storage makes this available
 import csv
+import decouple
 import io
 import json
 import operator
@@ -19,7 +21,7 @@ def normalize_book_entry(row):
         row['Location'] = location
     return row
 
-def read_books(books_file):
+def read_books(books_file, dummy_key=None):
     with io.open(books_file, 'r', encoding='utf-8') as instream:
         return { book['Number']: book
                  for book in [normalize_book_entry(row)
@@ -61,7 +63,7 @@ def normalize_item_entry(row):
         row['Normal location'] = normal_location
     return row
 
-def read_inventory(inventory_file):
+def read_inventory(inventory_file, dummy_key=None):
     if os.path.exists(inventory_file):
         with io.open(inventory_file, 'r', encoding='utf-8') as instream:
             return { item['Label number']: item
@@ -110,7 +112,7 @@ def normalize_location(row):
     row['Number'] = int(number) if number != "" else None
     return row
 
-def read_locations(locations_file):
+def read_locations(locations_file, dummy_key=None):
     with io.open(locations_file, 'r', encoding='utf-8') as instream:
         return { location['Number']: location
                  for location in [ normalize_location(row)
@@ -363,6 +365,16 @@ def cli(instream, outstream, prompt, locations, items, books):
                            items, books):
             break
 
+def storage_server_function(in_string, files_data):
+    pass
+    # parts = in_string.shsplit()
+    # run_command(?,
+    #             parts[0],
+    #             parts[1:],
+    #             files_data['storage.csv']
+    #             files_data['inventory.csv']
+    #             files_data['books.csv])
+
 def main():
     parser = argparse.ArgumentParser()
     org_files = os.environ.get("ORG", "~/org")
@@ -386,6 +398,7 @@ def main():
                         help="""Run a little CLI on a network socket.""")
     actions.add_argument("--cli", action='store_true',
                          help="""Run a little CLI on stdin and stdout.""")
+    client_server.client_server_add_arguments(parser)
     parser.add_argument("things",
                         nargs='*',
                         help="""The things to look for.""")
@@ -398,7 +411,22 @@ def main():
     if args.cli:
         cli(sys.stdin, sys.stdout, "storage> ", locations, items, books)
     elif args.server:
-        pass # cli(inputsocket, outputsocket, None, locations, items, books)
+        query_passphrase = decouple.config('query_passphrase')
+        reply_passphrase = decouple.config('reply_passphrase')
+        client_server.check_private_key_privacy(args)
+        query_key, reply_key = client_server.read_keys_from_files(args,
+                                                                  query_passphrase,
+                                                                  reply_passphrase)
+        # cli(inputsocket, outputsocket, None, locations, items, books)
+        client_server.run_servers(args.host, int(args.port),
+                                  getter=storage_server_function,
+                                  files={args.inventory: read_inventory,
+                                         args.books: read_books,
+                                         args.stock: read_inventory,
+                                         args.project_parts: read_inventory,
+                                         args.locations: read_locations},
+                                  query_key=query_key,
+                                  reply_key=reply_key)
     else:
         if args.things[0] in commands:
             run_command(sys.stdout, args.things[0], args.things[1:],

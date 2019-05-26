@@ -1,0 +1,3 @@
+#!/bin/bash
+export PYTHONPATH=$PYTHONPATH:/$HOME/open-projects/JCGS_py_server/
+./storage.py $*
