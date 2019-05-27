@@ -8,6 +8,7 @@ import json
 import operator
 import os
 import re
+import shlex
 import sys
 
 def normalize_book_entry(row):
@@ -355,7 +356,7 @@ def cli(instream, outstream, prompt, locations, items, books):
     while True:
         if prompt:
             outstream.write(prompt)
-        line_parts = instream.readline().strip().split()
+        line_parts = shlex.split(instream.readline().strip())
         if len(line_parts) == 0:
             continue
         if not run_command(outstream,
@@ -366,14 +367,18 @@ def cli(instream, outstream, prompt, locations, items, books):
             break
 
 def storage_server_function(in_string, files_data):
-    pass
-    # parts = in_string.shsplit()
-    # run_command(?,
-    #             parts[0],
-    #             parts[1:],
-    #             files_data['storage.csv']
-    #             files_data['inventory.csv']
-    #             files_data['books.csv])
+    command_parts = shlex.split(in_string)
+    if len(command_parts) > 0:
+        output_catcher = io.StringIO()
+        run_command(output_catcher,
+                    command_parts[0],
+                    command_parts[1:],
+                    files_data['storage.csv'],
+                    files_data['inventory.csv'],
+                    files_data['books.csv'])
+        return output_catcher.getvalue()
+    else:
+        return "Command was empty"
 
 def main():
     parser = argparse.ArgumentParser()
@@ -398,7 +403,7 @@ def main():
                         help="""Run a little CLI on a network socket.""")
     actions.add_argument("--cli", action='store_true',
                          help="""Run a little CLI on stdin and stdout.""")
-    client_server.client_server_add_arguments(parser)
+    client_server.client_server_add_arguments(parser, 9797)
     parser.add_argument("things",
                         nargs='*',
                         help="""The things to look for.""")
