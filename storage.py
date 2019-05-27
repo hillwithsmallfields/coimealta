@@ -101,6 +101,18 @@ def items_matching(inventory_index, pattern):
 def list_items(outstream, args, locations, items, books):
     """Show a table of where all the items are."""
     # todo: option to print table of where all inventory items are
+    by_location = {}
+    for idx, item in items.items():
+        if 'Normal location' in item:
+            loc = item['Normal location']
+            if loc in by_location:
+                by_location[loc].append(idx)
+            else:
+                by_location[loc] = [idx]
+    for loc, contents in by_location.items():
+        outstream.write(describe_nested_location(locations, loc) + ":\n")
+        for title in sorted([ items[idx]['Item'] for idx in contents ]):
+            outstream.write("    " + title + "\n")
     return True
 
 def name_completions(outstream, things, _locations, items, books):
