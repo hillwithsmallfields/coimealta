@@ -3,6 +3,7 @@ import argparse
 import client_server # the shell script ./storage makes this available
 import csv
 import decouple
+import functools
 import io
 import json
 import operator
@@ -22,7 +23,7 @@ def normalize_book_entry(row):
         row['Location'] = location
     return row
 
-def read_books(books_file, dummy_key=None):
+def read_books(books_file, _key=None):
     with io.open(books_file, 'r', encoding='utf-8') as instream:
         return { book['Number']: book
                  for book in [normalize_book_entry(row)
@@ -64,7 +65,7 @@ def normalize_item_entry(row):
         row['Normal location'] = normal_location
     return row
 
-def read_inventory(inventory_file, dummy_key=None):
+def read_inventory(inventory_file, _key=None):
     if os.path.exists(inventory_file):
         with io.open(inventory_file, 'r', encoding='utf-8') as instream:
             return { item['Label number']: item
@@ -90,7 +91,7 @@ def list_items(outstream, args, locations, items, books):
     # todo: option to print table of where all inventory items are
     return True
 
-def name_completions(outstream, things, locations, items, books):
+def name_completions(outstream, things, _locations, items, books):
     """Return the names matching a fragment."""
     if len(things) == 0:
         return ""
@@ -113,7 +114,7 @@ def normalize_location(row):
     row['Number'] = int(number) if number != "" else None
     return row
 
-def read_locations(locations_file, dummy_key=None):
+def read_locations(locations_file, _key=None):
     with io.open(locations_file, 'r', encoding='utf-8') as instream:
         return { location['Number']: location
                  for location in [ normalize_location(row)
@@ -174,8 +175,9 @@ def describe_nested_location(locations, location):
             if location != ""
             else "unknown")
 
-def counts(outstream, args, locations, items, books):
+def counts(outstream, _args, _locations, items, _books):
     """Count how many of each type of thing I have."""
+    # todo: maybe do the books here as well?
     types = {}
     for item in items.values():
         item_type = item['Type']
@@ -189,32 +191,41 @@ def counts(outstream, args, locations, items, books):
             subtypes[item_subtype] = 1
     for item_type in sorted(types.keys()):
         subtypes = types[item_type]
-        print (item_type if item_type != "" else "unspecified", reduce(operator.add, subtypes.values()))
-        for subtype in sorted(subtypes.keys ()):
-            print ("    ", subtype if subtype != "" else "unspecified", subtypes[subtype])
+        outstream.write((item_type if item_type != "" else "unspecified")
+                        + ": "
+                        + str(functools.reduce(operator.add, subtypes.values()))
+                        + "\n")
+        for subtype in sorted([ k for k in subtypes.keys() if k is not None ]):
+            outstream.write("    "
+                            + (subtype
+                               if subtype != "" and subtype is not None
+                               else "unspecified")
+                            + ": "
+                            + str(subtypes[subtype])
+                            + "\n")
 
-def capacities(outstream, args, locations, items, books):
+def capacities(outstream, _args, locations, _items, _books):
     """Analyze the storage capacities.
 Shows how much of each type of storage there is, and also a summary
 combining the types."""
-    capacities = {}
+    capacity_by_type = {}
     for location in locations.values():
         loctype = location['Type'].lower()
         locsize = location['Size'].lower()
         if loctype != "" and locsize != "":
-            capacities[loctype] = float(capacities.get(loctype, 0)) + float(locsize)
-    for loctype in sorted(capacities.keys()):
-        label_width = max(*map(len, capacities.keys()))
-        outstream.write(loctype.rjust(label_width) + " " + str(capacities[loctype]) + "\n")
-    volume = reduce(operator.add,
-                    map(lambda loctype: capacities.get(loctype, 0),
-                        ('box', 'crate', 'drawer', 'cupboard')))
-    length = reduce(operator.add,
-                    map(lambda loctype: capacities.get(loctype, 0),
-                        ('shelf', 'shelves', 'cupboard shelf', 'racklevel')))
-    area = reduce(operator.add,
-                  map(lambda loctype: capacities.get(loctype, 0),
-                        ('louvre panel', 'pegboard')))
+            capacity_by_type[loctype] = float(capacity_by_type.get(loctype, 0)) + float(locsize)
+    for loctype in sorted(capacity_by_type.keys()):
+        label_width = max(*map(len, capacity_by_type.keys()))
+        outstream.write(loctype.rjust(label_width) + " " + str(capacity_by_type[loctype]) + "\n")
+    volume = functools.reduce(operator.add,
+                    [ capacity_by_type.get(loctype, 0)
+                      for loctype in ('box', 'crate', 'drawer', 'cupboard') ])
+    length = functools.reduce(operator.add,
+                    [ capacity_by_type.get(loctype, 0)
+                      for loctype in ('shelf', 'shelves', 'cupboard shelf', 'racklevel') ])
+    area = functools.reduce(operator.add,
+                  [ capacity_by_type.get(loctype, 0)
+                    for loctype in ('louvre panel', 'pegboard') ])
     outstream.write("Total container volume: " + str(volume) + " litres\n")
     outstream.write("Total shelving length: " + str(length) + " metres\n")
     outstream.write("Total panel area: " + str(area) + " square metres\n")
@@ -273,7 +284,7 @@ def list_locations(outstream, things, locations, items, books):
     for where in locations_matching_patterns(locations, things):
         list_location(outstream, where, "", locations, items, books)
 
-def location_completions(outstream, things, locations, items, books):
+def location_completions(outstream, things, locations, _items, _books):
     """Return the location names matching a fragment."""
     if len(things) == 0:
         return ""
@@ -301,7 +312,7 @@ This finds books, other items, and locations."""
         outstream.write(finding + " is " + findings[finding] + "\n")
     return True
 
-def cmd_help(outstream, args, locations, items, books):
+def cmd_help(outstream, args, _locations, _items, _books):
     """Display some help."""
     if len(args) == 0:
         outstream.write("Commands are:\n")
@@ -318,11 +329,11 @@ def cmd_help(outstream, args, locations, items, books):
                                 + """ is not a command.  Type "help" for a list of commands.\n""")
     return True
 
-def cmd_quit(outstream, args, locations, items, books):
+def cmd_quit(_outstream, _args, _locations, _items, _books):
     """Stop the CLI."""
     return False
 
-def cmd_bad(outstream, args, locations, items, books):
+def cmd_bad(outstream, _args, _locations, _items, _books):
     """Report an invalid command."""
     outstream.write("""Bad command; enter "help" to get a list of commands\n""")
     return True
