@@ -44,9 +44,20 @@ def books_matching(book_index, pattern):
              for book in book_index.values()
              if book_matches(book, pattern) ]
 
-def list_books(outstream, args, locations, items, books):
+def list_books(outstream, _args, locations, _items, books):
     """Show a table of where all the books are."""
-    # todo: print table of where all books are
+    by_location = {}
+    for idx, book in books.items():
+        if 'Location' in book:
+            loc = book['Location']
+            if loc in by_location:
+                by_location[loc].append(idx)
+            else:
+                by_location[loc] = [idx]
+    for loc, contents in by_location.items():
+        outstream.write(describe_nested_location(locations, loc) + ":\n")
+        for title in sorted([ books[idx]['Title'] for idx in contents ]):
+            outstream.write("    " + title + "\n")
     return True
 
 unlabelled = -1
@@ -245,7 +256,7 @@ combining the types."""
 
 def construct_surrounders(locations):
     s = {}
-    for loc_num, loc_descr in locations.iteritems():
+    for loc_num, loc_descr in locations.items():
         around = loc_descr['ContainedWithin']
         if around:
             if around in s:
