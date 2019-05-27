@@ -6,6 +6,7 @@ import decouple
 import functools
 import io
 import json
+import math
 import operator
 import os
 import re
@@ -204,6 +205,13 @@ def counts(outstream, _args, _locations, items, _books):
                             + str(subtypes[subtype])
                             + "\n")
 
+def sum_capacities(all_data, types):
+    return math.ceil(functools.reduce(operator.add,
+                                      [ all_data.get(loctype, 0)
+                                        for loctype in types ]))
+
+bookshelf_area = 2 * 1.5 # factor to convert meter of bookshelf to litre of books
+
 def capacities(outstream, _args, locations, _items, _books):
     """Analyze the storage capacities.
 Shows how much of each type of storage there is, and also a summary
@@ -216,19 +224,23 @@ combining the types."""
             capacity_by_type[loctype] = float(capacity_by_type.get(loctype, 0)) + float(locsize)
     for loctype in sorted(capacity_by_type.keys()):
         label_width = max(*map(len, capacity_by_type.keys()))
-        outstream.write(loctype.rjust(label_width) + " " + str(capacity_by_type[loctype]) + "\n")
-    volume = functools.reduce(operator.add,
-                    [ capacity_by_type.get(loctype, 0)
-                      for loctype in ('box', 'crate', 'drawer', 'cupboard') ])
-    length = functools.reduce(operator.add,
-                    [ capacity_by_type.get(loctype, 0)
-                      for loctype in ('shelf', 'shelves', 'cupboard shelf', 'racklevel') ])
-    area = functools.reduce(operator.add,
-                  [ capacity_by_type.get(loctype, 0)
-                    for loctype in ('louvre panel', 'pegboard') ])
+        outstream.write(loctype.rjust(label_width) + " " + str(math.ceil(capacity_by_type[loctype])) + "\n")
+    volume = sum_capacities(capacity_by_type, ('box', 'crate',
+                                               'drawer', 'cupboard'))
+    bookshelf_length = sum_capacities(capacity_by_type, ('bookshelf', 'bookshelves'))
+    other_length = sum_capacities(capacity_by_type, ('shelf', 'shelves',
+                                                     'cupboard shelf', 'racklevel'))
+    area = sum_capacities(capacity_by_type, ('louvre panel', 'pegboard'))
     outstream.write("Total container volume: " + str(volume) + " litres\n")
-    outstream.write("Total shelving length: " + str(length) + " metres\n")
-    outstream.write("Total panel area: " + str(area) + " square metres\n")
+    outstream.write("Total container and book (estimate) volume: "
+                    + str(volume + bookshelf_length * bookshelf_area)
+                    + " litres\n")
+    outstream.write("Total shelving length: "
+                    + str(bookshelf_length + other_length)
+                    + " metres\n")
+    outstream.write("Total panel area: "
+                    + str(area)
+                    + " square metres\n")
     return True
 
 def construct_surrounders(locations):
