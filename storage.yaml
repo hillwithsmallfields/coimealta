@@ -1,0 +1,7 @@
+# Config file for the storage system
+storage:
+  locations: $ORG/storage.csv
+  books: $ORG/books.csv
+  inventory: $ORG/inventory.csv
+  stock: $ORG/stock.csv
+  project_parts: $ORG/project-parts.csv

@@ -12,6 +12,7 @@ import os
 import re
 import shlex
 import sys
+# import yaml
 
 def normalize_book_entry(row):
     ex_libris = row['Number']
@@ -426,23 +427,28 @@ def storage_server_function(in_string, files_data):
     else:
         return "Command was empty"
 
+org_files = os.environ.get("ORG", "~/org")
+arg_defaults = {
+    'locations': "$ORG/storage.csv",
+    'books': "$ORG/books.csv",
+    'inventory': "$ORG/inventory.csv",
+    'stock': "$ORG/stock.csv",
+    'project_parts': "$ORG/project-parts.csv" }
+
 def main():
     parser = argparse.ArgumentParser()
-    org_files = os.environ.get("ORG", "~/org")
+    # parser.add_argument("--config", "-c",
+    #                     default="/usr/local/share/storage.yaml",
+    #                     help="""The config file for the storage system.""")
     parser.add_argument("--locations", "-f",
-                        default=os.path.join(org_files, "storage.csv"),
                         help="""The CSV file containing the storage locations.""")
     parser.add_argument("--books", "-b",
-                        default=os.path.join(org_files, "books.csv"),
                         help="""The CSV file containing the book catalogue.""")
     parser.add_argument("--inventory", "-i",
-                        default=os.path.join(org_files, "inventory.csv"),
                         help="""The CSV file containing the general inventory.""")
     parser.add_argument("--stock", "-s",
-                        default=os.path.join(org_files, "stock.csv"),
                         help="""The CSV file containing the stock material inventory.""")
     parser.add_argument("--project-parts", "-p",
-                        default=os.path.join(org_files, "project-parts.csv"),
                         help="""The CSV file containing the project parts inventory.""")
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument("--server", action='store_true',
@@ -454,6 +460,12 @@ def main():
                         nargs='*',
                         help="""The things to look for.""")
     args = parser.parse_args()
+    # with open(os.path.expanduser(os.path.expandvars(args.config))) as config_file:
+    #     config = yaml.load(config_file)
+    #     print("config is", config)
+    for defkey, defval in arg_defaults.items():
+        if defkey not in args.__dict__ or args.__dict__[defkey] is None:
+            args.__dict__[defkey] = os.path.expandvars(defval)
     locations = read_locations(args.locations)
     items = read_inventory(args.inventory)
     items.update(read_inventory(args.stock))
