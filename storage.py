@@ -148,10 +148,14 @@ def read_locations(locations_file, _key=None):
 
 def locations_matching(locations_index, pattern):
     """Return a list of location numbers for locations that match a regexp."""
-    pattern = re.compile(pattern, re.IGNORECASE)
-    return [ loc['Number']
-             for loc in locations_index.values()
-             if pattern.search(loc['Description']) ]
+    if pattern == "all":
+        return [ loc['Number']
+                 for loc in locations_index.values() ]
+    else:
+        pattern = re.compile(pattern, re.IGNORECASE)
+        return [ loc['Number']
+                 for loc in locations_index.values()
+                 if pattern.search(loc['Description']) ]
 
 def locations_matching_patterns(locations_index, patterns):
     """Return a set of location numbers for locations that match any of a list of regexps."""
@@ -266,25 +270,6 @@ combining the types."""
                     + str(area)
                     + " square metres\n")
     return True
-
-def construct_surrounders(locations):
-    s = {}
-    for loc_num, loc_descr in locations.items():
-        around = loc_descr['ContainedWithin']
-        if around:
-            if around in s:
-                s[around].append(loc_num)
-            else:
-                s[around] = [loc_num]
-    return s
-
-def add_contained_storage(matching_locations, locations, surrounders, loc_number):
-    if loc_number in surrounders:
-        for inner_container in surrounders[loc_number]:
-            matching_locations[inner_container] = locations[inner_container]
-            add_contained_storage(matching_locations, locations, surrounders, inner_container)
-
-surrounders = None
 
 def list_location(outstream, location, prefix, locations, items, books):
     """List everything that is in the given location."""
