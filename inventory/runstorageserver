@@ -1,0 +1,3 @@
+#!/bin/bash
+export PYTHONPATH=$PYTHONPATH:/$OPEN_PROJECTS/JCGS_py_server/
+./storage.py --server --query-key /home/jcgs/open-projects/JCGS_py_server/querykey --reply-key /home/jcgs/open-projects/JCGS_py_server/replykey.pub
