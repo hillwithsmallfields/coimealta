@@ -18,7 +18,9 @@ storage.py
 
 This is the main program, and it looks for where an item is stored, or
 reports about storage locations.  It can be run as a one-shot command
-line, or as a CLI, or as a server over TCP or UDP.
+line, or as a CLI, or, with
+https://github.com/hillwithsmallfields/JCGS_py_server, as a server
+over TCP or UDP.
 
 It takes the first entry on its command line, or an input line when
 running as a CLI, as a command, and the rest as things to look for, if
@@ -39,6 +41,13 @@ If you've filled in the sizes of storage locations, `capacities` will
 tell you your total box volume and shelf length (aimed mostly at for
 when I do eventually move house).
 
+storage.el
+----------
+
+Similar functionality to storage.py, but inside GNUEmacs.  This
+provides the command `storage-locate-item` which reads an item name
+(with completion) and shows where the item belongs.
+
 books.py
 --------
 
@@ -57,7 +66,7 @@ the locations file is called `$ORG/storage.csv`.
 `inventory.csv`, `stock.csv`, and `project-parts.csv` are expected to
 have these columns:
 
-  - Label number
+  - Label number (`inventory.csv` only)
   - *Item*
   - *Type*
   - *Subtype*
@@ -143,3 +152,4 @@ quickly, such as `35L red box`.
 
 I might add a column for two- or three-dimensional coordinates, to
 allow display of a location on a floorplan or 3D model.
+
