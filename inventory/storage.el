@@ -107,11 +107,13 @@ pair into that table using that column."
 
 (defun storage-completing-read-item (prompt)
   "Read an item name, using PROMPT."
-  (completing-read prompt storage-inventory-table nil t))
+  (let ((completion-ignore-case t))
+    (completing-read prompt storage-inventory-table nil t)))
 
 (defun storage-completing-read-location (prompt)
   "Read a location name, using PROMPT."
-  (completing-read prompt storage-locations-table nil t))
+  (let ((completion-ignore-case t))
+    (completing-read prompt storage-locations-table nil t)))
 
 (defun storage-nested-location (location)
   "Construct the surroundings of LOCATION.
