@@ -1,3 +1,5 @@
 #!/bin/bash
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+OPEN_PROJECTS=${OPEN_PROJECTS-$HOME/open-projects}
 export PYTHONPATH=$PYTHONPATH:/$OPEN_PROJECTS/JCGS_py_server/
-./storage.py --server --query-key /home/jcgs/open-projects/JCGS_py_server/querykey --reply-key /home/jcgs/open-projects/JCGS_py_server/replykey.pub
+$SCRIPT_DIR/storage.py --server --query-key $OPEN_PROJECTS/JCGS_py_server/querykey --reply-key $OPEN_PROJECTS/JCGS_py_server/replykey.pub
