@@ -32,6 +32,9 @@ def read_books(books_file, _key=None):
                               for row in csv.DictReader(instream)]
                  if book['Number'] != "" }
 
+# Description for reading these files using client_server.py:
+# ('Number', normalize_book_entry)
+
 def book_matches(book, pattern):
     pattern = re.compile(pattern , re.IGNORECASE)
     return (pattern.search(book['Title'])
@@ -87,6 +90,9 @@ def read_inventory(inventory_file, _key=None):
                                        for row in csv.DictReader(instream) ])}
     else:
         return {}
+
+# Description for reading these files using client_server.py:
+# ('Label number', normalize_item_entry)
 
 def item_matches(item, pattern):
     pattern = re.compile(pattern , re.IGNORECASE)
@@ -145,6 +151,9 @@ def read_locations(locations_file, _key=None):
                  for location in [ normalize_location(row)
                                    for row in csv.DictReader(instream)
                                    if row['Number'] is not None ] }
+
+# Description for reading these files using client_server.py:
+# ('Number', normalize_location)
 
 def locations_matching(locations_index, pattern):
     """Return a list of location numbers for locations that match a regexp."""
@@ -377,6 +386,7 @@ def run_command(outstream,
                 things,
                 locations,
                 items, books):
+    # todo: change the arguments to these functions, to take a dictionary mapping standard names to the used names, and one mapping the used names to the data
     return commands.get(command, cmd_bad)(outstream,
                                           things,
                                           locations,
@@ -465,16 +475,16 @@ def main():
         query_key, reply_key = client_server.read_keys_from_files(args,
                                                                   query_passphrase,
                                                                   reply_passphrase)
-        # cli(inputsocket, outputsocket, None, locations, items, books)
-        client_server.run_servers(args.host, int(args.port),
-                                  getter=storage_server_function,
-                                  files={args.inventory: read_inventory,
-                                         args.books: read_books,
-                                         args.stock: read_inventory,
-                                         args.project_parts: read_inventory,
-                                         args.locations: read_locations},
-                                  query_key=query_key,
-                                  reply_key=reply_key)
+        client_server.run_servers(
+            args.host, int(args.port),
+            getter=storage_server_function,
+            files={args.inventory: ('Label number', normalize_item_entry),
+                   args.books: ('Number', normalize_book_entry),
+                   args.stock: ('Label number', normalize_item_entry),
+                   args.project_parts: ('Label number', normalize_item_entry),
+                   args.locations: ('Number', normalize_location)},
+            query_key=query_key,
+            reply_key=reply_key)
     else:
         if args.things[0] in commands:
             run_command(sys.stdout, args.things[0], args.things[1:],
