@@ -89,4 +89,7 @@ def write_contacts(filename, by_name):
                 row[multi] = ' '.join(row[multi])
             del row['_name_']
             del row['_groups_']
-            contacts_writer.writerow(row)
+            try:
+                contacts_writer.writerow(row)
+            except ValueError:
+                print "Unwritable row: ", row
