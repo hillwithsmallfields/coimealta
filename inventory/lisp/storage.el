@@ -48,6 +48,18 @@
 (defvar storage-locations-index-table nil
   "Hash table from storage location numbers to description/containing-location pairs.")
 
+(defun safe-string-to-number (raw)
+  "Convert RAW to a number."
+  (cond
+   ((stringp raw)
+    (string-to-number raw))
+   ((numberp raw)
+    raw)
+   ;; ((null raw) ; not needed, as handled by the default case
+   ;;  0)
+   (t
+    0)))
+
 (defun storage-read-csv (filename table
                                   name-field-name location-field-name
                                   &optional index-table index-field-name)
@@ -74,10 +86,10 @@ pair into that table using that column."
                         (point) (line-end-position))
                        ","))
                (description (nth name-field-number cells))
-               (location (string-to-number (nth location-field-number cells))))
+               (location (safe-string-to-number (nth location-field-number cells))))
           (puthash description location table)
           (when index-table
-            (puthash (string-to-number (nth index-field-number cells))
+            (puthash (safe-string-to-number (nth index-field-number cells))
                      (cons description location)
                      index-table)))
         (forward-line)))))
