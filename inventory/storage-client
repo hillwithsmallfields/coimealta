@@ -1,7 +1,7 @@
 #!/bin/bash
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 OPEN_PROJECTS=${OPEN_PROJECTS-$HOME/open-projects}
-CLIENT_SERVER_LIBDIR=$OPEN_PROJECTS/Simple_py_server
+CLIENT_SERVER_LIBDIR=$OPEN_PROJECTS/Simple_client_server
 if [ ! -d $CLIENT_SERVER_LIBDIR ]
 then
     echo "Could not find client/server library"
@@ -10,4 +10,4 @@ then
     exit 1
 fi
 export PYTHONPATH=$PYTHONPATH:$CLIENT_SERVER_LIBDIR
-$SCRIPT_DIR/py/storage_client.py --query-key $CLIENT_SERVER_LIBDIR/querykey.pub --reply-key $CLIENT_SERVER_LIBDIR/replykey $*
+$SCRIPT_DIR/py/storage_client.py --tcp --query-key $CLIENT_SERVER_LIBDIR/querykey.pub --reply-key $CLIENT_SERVER_LIBDIR/replykey $*
