@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import argparse
-import client_server # the shell script ./storage makes this available
+import client_server # the shell script ../storage makes this available
 import csv
 import decouple
 import functools
