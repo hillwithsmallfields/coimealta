@@ -14,7 +14,7 @@ Christmas cards).
 Programs
 ========
 
-link-contacts.py
+link_contacts.py
 ----------------
 
 Processes a contacts file, converting names found in the link fields
@@ -33,6 +33,15 @@ add others from time to time).
 
 The `--graph` option outputs graphviz-formatted data to show
 connections between the people you know.  Not currently very good.
+
+list_contacts.py
+----------------
+
+people.py
+---------
+
+csv-contacts.el
+---------------
 
 Files
 =====

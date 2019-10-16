@@ -1,13 +1,13 @@
 #!/bin/bash
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 OPEN_PROJECTS=${OPEN_PROJECTS-$HOME/open-projects}
-CLIENT_SERVER_LIBDIR=$OPEN_PROJECTS/JCGS_py_server
+CLIENT_SERVER_LIBDIR=$OPEN_PROJECTS/Simple_client_server
 if [ ! -d $CLIENT_SERVER_LIBDIR ]
 then
     echo "Could not find client/server library"
-    echo "Please clone https://github.com/hillwithsmallfields/JCGS_py_server.git"
+    echo "Please clone https://github.com/hillwithsmallfields/Simple_client_server.git"
     echo "and point the environment variable OPEN_PROJECTS at the directory above it."
     exit 1
 fi
 export PYTHONPATH=$PYTHONPATH:/$CLIENT_SERVER_LIBDIR
-$SCRIPT_DIR/storage.py --server --query-key $CLIENT_SERVER_LIBDIR/querykey --reply-key $CLIENT_SERVER_LIBDIR/replykey.pub
+$SCRIPT_DIR/py/storage.py --server --query-key $CLIENT_SERVER_LIBDIR/querykey --reply-key $CLIENT_SERVER_LIBDIR/replykey.pub $*

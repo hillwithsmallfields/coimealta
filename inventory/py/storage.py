@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import argparse
-import client_server # the shell script ./storage makes this available
+import client_server # the shell script ../storage makes this available
 import csv
 import decouple
 import functools
@@ -16,11 +16,11 @@ import sys
 
 def normalize_book_entry(row):
     ex_libris = row['Number']
-    if ex_libris != "":
+    if isinstance(ex_libris, str) and ex_libris != "":
         ex_libris = int(ex_libris)
         row['Number'] = ex_libris
     location = row['Location']
-    if location != "":
+    if isinstance(location, str) and location != "":
         location = int(location)
         row['Location'] = location
     return row
@@ -69,14 +69,14 @@ unlabelled = -1
 def normalize_item_entry(row):
     global unlabelled
     label_number = row.get('Label number', "")
-    if label_number != "":
+    if isinstance(label_number, str) and label_number != "":
         label_number = int(label_number)
         row['Label number'] = label_number
     else:
         row['Label number'] = unlabelled
         unlabelled -= 1
     normal_location = row['Normal location']
-    if normal_location and re.match("[0-9]+", normal_location):
+    if isinstance(normal_location, str) and re.match("[0-9]+", normal_location):
         normal_location = int(normal_location)
         row['Normal location'] = normal_location
     return row
@@ -138,11 +138,16 @@ def name_completions(outstream, things, _locations, items, books):
 
 def normalize_location(row):
     contained_within = row['ContainedWithin']
-    row['ContainedWithin'] = (int(contained_within)
-                              if contained_within != ""
-                              else None)
+    try:
+        row['ContainedWithin'] = (int(contained_within)
+                                  if (isinstance(contained_within, str)
+                                      and contained_within != "")
+                                  else None)
+    except ValueError:
+        row['ContainedWithin'] = None
     number = row['Number']
-    row['Number'] = int(number) if number != "" else None
+    row['Number'] = int(number) if (isinstance(number, str)
+                                    and number != "") else None
     return row
 
 def read_locations(locations_file, _key=None):
@@ -408,27 +413,43 @@ def cli(instream, outstream, prompt, locations, items, books):
                            items, books):
             break
 
+filenames = {}
+
+remembered_items_data = {'combined': None,
+                         'inventory': None,
+                         'stock': None,
+                         'project_parts': None,
+                         'books': None,
+                         'locations': None}
+
 def storage_server_function(in_string, files_data):
     command_parts = shlex.split(in_string)
     if len(command_parts) > 0:
+        inventory = files_data[filenames['inventory']]
+        stock = files_data[filenames['stock']]
+        project_parts = files_data[filenames['project_parts']]
+        if (inventory is not remembered_items_data['inventory']
+            or stock is not remembered_items_data['stock']
+            or project_parts is not remembered_items_data['project_parts']):
+            items_data = inventory
+            items_data.update(stock)
+            items_data.update(project_parts)
+            remembered_items_data['combined'] = items_data
+            remembered_items_data['inventory'] = inventory
+            remembered_items_data['stock'] = stock
+            remembered_items_data['project_parts'] = project_parts
+        else:
+            items_data = remembered_items_data['combined']
         output_catcher = io.StringIO()
         run_command(output_catcher,
                     command_parts[0],
                     command_parts[1:],
-                    files_data['storage.csv'],
-                    files_data['inventory.csv'],
-                    files_data['books.csv'])
+                    files_data[filenames['locations']],
+                    items_data,
+                    files_data[filenames['books']])
         return output_catcher.getvalue()
     else:
         return "Command was empty"
-
-org_files = os.environ.get("ORG", "~/org")
-arg_defaults = {
-    'locations': "$ORG/storage.csv",
-    'books': "$ORG/books.csv",
-    'inventory': "$ORG/inventory.csv",
-    'stock': "$ORG/stock.csv",
-    'project_parts': "$ORG/project-parts.csv" }
 
 def main():
     parser = argparse.ArgumentParser()
@@ -436,14 +457,19 @@ def main():
     #                     default="/usr/local/share/storage.yaml",
     #                     help="""The config file for the storage system.""")
     parser.add_argument("--locations", "-f",
+                        default="$ORG/storage.csv",
                         help="""The CSV file containing the storage locations.""")
     parser.add_argument("--books", "-b",
+                        default="$ORG/books.csv",
                         help="""The CSV file containing the book catalogue.""")
     parser.add_argument("--inventory", "-i",
+                        default="$ORG/inventory.csv",
                         help="""The CSV file containing the general inventory.""")
     parser.add_argument("--stock", "-s",
+                        default="$ORG/stock.csv",
                         help="""The CSV file containing the stock material inventory.""")
     parser.add_argument("--project-parts", "-p",
+                        default="$ORG/project-parts.csv",
                         help="""The CSV file containing the project parts inventory.""")
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument("--server", action='store_true',
@@ -458,40 +484,51 @@ def main():
     # with open(os.path.expanduser(os.path.expandvars(args.config))) as config_file:
     #     config = yaml.load(config_file)
     #     print("config is", config)
-    for defkey, defval in arg_defaults.items():
-        if defkey not in args.__dict__ or args.__dict__[defkey] is None:
+    for defkey, defval in args.__dict__.items():
+        if isinstance(defval, str):
             args.__dict__[defkey] = os.path.expandvars(defval)
-    locations = read_locations(args.locations)
-    items = read_inventory(args.inventory)
-    items.update(read_inventory(args.stock))
-    items.update(read_inventory(args.project_parts))
-    books = read_books(args.books)
-    if args.cli:
-        cli(sys.stdin, sys.stdout, "storage> ", locations, items, books)
-    elif args.server:
+    if args.server:
         query_passphrase = decouple.config('query_passphrase')
         reply_passphrase = decouple.config('reply_passphrase')
         client_server.check_private_key_privacy(args)
         query_key, reply_key = client_server.read_keys_from_files(args,
                                                                   query_passphrase,
                                                                   reply_passphrase)
-        client_server.run_servers(
-            args.host, int(args.port),
-            getter=storage_server_function,
-            files={args.inventory: ('Label number', normalize_item_entry),
-                   args.books: ('Number', normalize_book_entry),
-                   args.stock: ('Label number', normalize_item_entry),
-                   args.project_parts: ('Label number', normalize_item_entry),
-                   args.locations: ('Number', normalize_location)},
-            query_key=query_key,
-            reply_key=reply_key)
+        global filenames
+        filenames = {'inventory': os.path.basename(args.inventory),
+                     'books': os.path.basename(args.books),
+                     'stock': os.path.basename(args.stock),
+                     'project_parts': os.path.basename(args.project_parts),
+                     'locations': os.path.basename(args.locations)}
+        client_server.run_servers(args.host, int(args.port),
+                                  getter=storage_server_function,
+                                  files={args.inventory: ('Label number',
+                                                          normalize_item_entry),
+                                         args.books: ('Number',
+                                                      normalize_book_entry),
+                                         args.stock: ('Label number',
+                                                      normalize_item_entry),
+                                         args.project_parts: ('Label number',
+                                                              normalize_item_entry),
+                                         args.locations: ('Number',
+                                                          normalize_location)},
+                                  query_key=query_key,
+                                  reply_key=reply_key)
     else:
-        if args.things[0] in commands:
-            run_command(sys.stdout, args.things[0], args.things[1:],
-                        locations, items, books)
+        locations = read_locations(args.locations)
+        items = read_inventory(args.inventory)
+        items.update(read_inventory(args.stock))
+        items.update(read_inventory(args.project_parts))
+        books = read_books(args.books)
+        if args.cli:
+            cli(sys.stdin, sys.stdout, "storage> ", locations, items, books)
         else:
-            run_command(sys.stdout, "where", args.things,
-                        locations, items, books)
+            if args.things[0] in commands:
+                run_command(sys.stdout, args.things[0], args.things[1:],
+                            locations, items, books)
+            else:
+                run_command(sys.stdout, "where", args.things,
+                            locations, items, books)
 
 if __name__ == "__main__":
     main()

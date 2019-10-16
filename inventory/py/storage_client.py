@@ -21,7 +21,8 @@ def main():
     received = client_server.get_response(
         text,
         args.host, args.port, args.tcp,
-        encryption_version=ord('H' if query_key and reply_key else 'p'),
+        encryption_scheme=ord('H' if query_key and reply_key else 'p'),
+        representation_scheme=ord('p'),
         query_key=query_key,
         reply_key=reply_key)
 
