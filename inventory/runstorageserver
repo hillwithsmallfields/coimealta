@@ -10,4 +10,4 @@ then
     exit 1
 fi
 export PYTHONPATH=$PYTHONPATH:/$CLIENT_SERVER_LIBDIR
-$SCRIPT_DIR/py/storage.py --server --query-key $CLIENT_SERVER_LIBDIR/querykey --reply-key $CLIENT_SERVER_LIBDIR/replykey.pub $*
+$SCRIPT_DIR/storage.py --server --query-key $CLIENT_SERVER_LIBDIR/querykey --reply-key $CLIENT_SERVER_LIBDIR/replykey.pub $*
