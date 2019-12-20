@@ -19,7 +19,7 @@ storage.py
 This is the main program, and it looks for where an item is stored, or
 reports about storage locations.  It can be run as a one-shot command
 line, or as a CLI, or, with
-https://github.com/hillwithsmallfields/JCGS_py_server, as a server
+https://github.com/hillwithsmallfields/Simple_client_server, as a server
 over TCP or UDP.
 
 It takes the first entry on its command line, or an input line when
