@@ -252,7 +252,9 @@ def sum_capacities(all_data, types):
                                       [ all_data.get(loctype, 0)
                                         for loctype in types ]))
 
-bookshelf_area = 2 * 1.5 # factor to convert meter of bookshelf to litre of books
+# factor to convert meter of bookshelf to litre of books
+# the 10 is because a liter is a decimeter along each side
+bookshelf_area = 10 * 2 * 1.5
 
 def capacities(outstream, _args, locations, _items, _books):
     """Analyze the storage capacities.
