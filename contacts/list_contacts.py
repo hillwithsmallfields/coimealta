@@ -1,8 +1,12 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import argparse
 import re
 import contacts_data
+
+def safesearch(flags, text):
+    print("Searching", text)
+    return flags.search(text)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -15,6 +19,9 @@ def main():
                         action='store_true',
                         help="""List people by address, grouping together those at the same address.
                         Without this, people are listed individually, with their email addresses.""")
+    parser.add_argument("-e", "--email-addresses",
+                        action='store_true',
+                        help="""List people by email address.""")
     parser.add_argument("input")
     args = parser.parse_args()
     by_id, _ = contacts_data.read_contacts(args.input)
@@ -22,7 +29,7 @@ def main():
     if args.flag:
         flags = re.compile("[" + "".join(args.flag) + "]")
         selected += [someone for someone in by_id.values()
-                     if flags.search(someone['Flags'])]
+                     if flags.search(someone.get('Flags', "") or "")]
     if args.group:
         groups = set(args.group)
         selected += [someone for someone in by_id.values()
@@ -35,11 +42,9 @@ def main():
                     # todo: make this only if they are at the same address
                     selected.append(by_id[partner])
         for whoever in selected:
-            print whoever['_name_'], "has offspring", whoever['Offspring']
             for offspring in whoever['Offspring']:
-                print "  ", offspring
                 if offspring not in invited_ids:
-                    print "  -- needs inviting"
+                    print(contacts_data.make_name(by_id[offspring]), "  -- maybe add")
                     # todo: make this only if they are at the same address
                     selected.append(by_id[offspring])
     if args.postal_addresses:
@@ -50,20 +55,22 @@ def main():
                 by_address[address].append(contact)
             else:
                 by_address[address] = [contact]
-        for addr, residents in by_address.iteritems():
+        print(len(by_address), "addresses")
+        print("")
+        for addr, residents in by_address.items():
             # todo: sort residents to bring oldest (or most ancestral) to the start
             names = [contacts_data.make_name(person) for person in residents]
-            print ", ".join(names[:-1])+" and "+names[-1] if len(names) >= 2 else names[0]
-            print "  " + "\n  ".join([a for a in addr if a != ""])
-            print ""
+            print(", ".join(names[:-1])+" and "+names[-1] if len(names) >= 2 else names[0])
+            print("  " + "\n  ".join([a for a in addr if a != ""]))
+            print("")
     else:
         for contact in selected:
             if args.email_addresses:
                 email = contact['Primary email']
                 if email != "":
-                    print email + " <" + contact['_name_'] + ">"
+                    print(email + " <" + contact['_name_'] + ">")
             else:
-                print contact['_name_']
+                print(contact['_name_'])
 
 if __name__ == "__main__":
     main()

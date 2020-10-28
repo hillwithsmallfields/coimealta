@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import argparse
 import re
@@ -55,11 +55,11 @@ def print_summary(by_aspect, label):
         if frequency not in by_frequency:
             by_frequency[frequency] = []
         by_frequency[frequency].append(k)
-    print label, "; ".join(
+    print(label, "; ".join(
         [ "; ".join(
             ["%s(%d)" % (bf, freq)
              for bf in sorted(by_frequency[freq])])
-          for freq in reversed(sorted(by_frequency.keys()))])
+          for freq in reversed(sorted(by_frequency.keys()))]))
 
 def main():
     parser = argparse.ArgumentParser()
@@ -73,7 +73,7 @@ def main():
     by_title = {}
     by_place_met = {}
 
-    print "Reading contacts from", args.input
+    print("Reading contacts from", args.input)
     by_id, by_name = contacts_data.read_contacts(args.input)
 
     for person in by_id.values():
@@ -111,33 +111,33 @@ def main():
             accumulate(person, 'Title', by_title)
             accumulate(person, 'Place met', by_place_met)
         n_people = len(by_id)
-        print n_people, "people"
+        print(n_people, "people")
         print_summary(by_nationality, "nationalities:")
         print_summary(by_gender, "genders:")
         print_summary(by_title, "titles:")
         print_summary(by_place_met, "places met:")
         ordained = contacts_data.count_grouped_titles(by_title, ["Revd", "Revd Dr", "Revd Prof", "RtRevd"])
         doctored = contacts_data.count_grouped_titles(by_title, ["Dr", "Revd Dr", "Prof", "Revd Prof"])
-        print "%d ordained (%d%% of the people you know)" % (ordained, ordained*100 / n_people)
-        print "%d with doctorates (%d%% of the people you know)" % (doctored, doctored * 100 / n_people)
+        print("%d ordained (%d%% of the people you know)" % (ordained, ordained*100 / n_people))
+        print("%d with doctorates (%d%% of the people you know)" % (doctored, doctored * 100 / n_people))
 
     if args.graph:
-        print "digraph {"
+        print("digraph {")
         for id, person in by_id.iteritems():
             their_partners = person['Partners']
             their_offspring = person['Offspring']
             their_parents = person['Parents']
             if len(their_partners) > 0 or len(their_offspring) > 0 or len(their_parents) > 0:
-                print "  ", id, '[label="' + person['_name_'] + '" shape=' + ("box" if person['Gender'] == 'm' else "diamond") + "]"
+                print("  ", id, '[label="' + person['_name_'] + '" shape=' + ("box" if person['Gender'] == 'm' else "diamond") + "]")
             if len(their_partners) > 0:
-                print "    ", id, "->", "{", ",".join(their_partners), "}"
-                print "    {rank=same", id, " ".join(their_partners), "}"
+                print("    ", id, "->", "{", ",".join(their_partners), "}")
+                print("    {rank=same", id, " ".join(their_partners), "}")
             if len(their_offspring) > 0:
-                print "    ", id, "->", "{", ",".join(their_offspring), "} [style=dotted]"
-                print "    {rank=same", " ".join(their_offspring), "}"
+                print("    ", id, "->", "{", ",".join(their_offspring), "} [style=dotted]")
+                print("    {rank=same", " ".join(their_offspring), "}")
             if len(their_parents) > 0:
-                print "    ", id, "->", "{", ",".join(their_parents), "} [style=dashed]"
-        print "}"
+                print("    ", id, "->", "{", ",".join(their_parents), "} [style=dashed]")
+        print("}")
 
     contacts_data.write_contacts(args.output, by_name)
 

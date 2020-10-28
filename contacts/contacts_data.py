@@ -1,4 +1,5 @@
-from backports import csv
+# from backports import csv
+import csv
 import io
 import operator
 import random
@@ -44,10 +45,10 @@ def make_address(person):
             person.get('Country'))
 
 def make_ID():
-    return (str(unichr(random.randint(0, 19) + ord('G')))
-            + str(unichr(random.randint(0, 9) + ord('0')))
-            + str(unichr(random.randint(0, 25) + ord('A')))
-            + str(unichr(random.randint(0, 9) + ord('0'))))
+    return (str(chr(random.randint(0, 19) + ord('G')))
+            + str(chr(random.randint(0, 9) + ord('0')))
+            + str(chr(random.randint(0, 25) + ord('A')))
+            + str(chr(random.randint(0, 9) + ord('0'))))
 
 def read_contacts(filename):
     by_id = {}
@@ -93,4 +94,4 @@ def write_contacts(filename, by_name):
             try:
                 contacts_writer.writerow(row)
             except ValueError:
-                print "Unwritable row: ", row
+                print("Unwritable row: ", row)
