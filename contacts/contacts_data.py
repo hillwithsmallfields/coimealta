@@ -35,6 +35,20 @@ def make_name(person):
                     + person.get('Middle names', "").split()
                     + [person.get('Surname', "")])
 
+def string_list_with_and(items):
+    return ", ".join(items[:-1])+", and "+items[-1] if len(items) > 2 else items[0]+" and "+items[1] if len(items) == 2 else items[0]
+
+# todo: sort residents to bring oldest (or most ancestral) to the start
+def names_string(people):
+    by_surname = {}
+    for person in people:
+        surname = person.get('Surname', "")
+        if surname not in by_surname:
+            by_surname[surname] = []
+        by_surname[surname].append(person.get('Given name', ""))
+    names = [string_list_with_and(sorted(by_surname[surname])) + " " + surname for surname in sorted(by_surname.keys())]
+    return string_list_with_and(names)
+
 def make_address(person):
     return (person.get('Street', ""),
             person.get('Village/District', ""),

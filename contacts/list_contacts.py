@@ -58,9 +58,7 @@ def main():
         print(len(by_address), "addresses")
         print("")
         for addr, residents in by_address.items():
-            # todo: sort residents to bring oldest (or most ancestral) to the start
-            names = [contacts_data.make_name(person) for person in residents]
-            print(", ".join(names[:-1])+" and "+names[-1] if len(names) >= 2 else names[0])
+            print(contacts_data.names_string(residents))
             print("  " + "\n  ".join([a for a in addr if a != ""]))
             print("")
     else:
