@@ -28,11 +28,14 @@ def end_page(outstream):
 
 def write_label_at(x, y, config, label_lines, outstream):
     leading = config['leading']
+    fontsize = config['label-height'] / ((len(label_lines) + 1) * leading)
+    if config['verbose']:
+        print("placing", label_lines[0], "at", x, y, "using fontsize", fontsize)
     outstream.write('  <g transform="translate(%g,%g)">\n' % (x, y))
     if config['outline']:
         outstream.write('    <rect x="0" y="0" width="%g" height="%g" fill="white" stroke="green"/>\n' % (config['label-width'], config['label-height']))
     outstream.write('    <g transform="translate(%g,%g)">\n' % (config['label-left-margin'], config['label-top-margin']))
-    outstream.write('      <text font-size="%g">\n' % (config['label-height'] / ((len(label_lines) + 1) * leading)))
+    outstream.write('      <text font-size="%g">\n' % fontsize)
     for iline, line in enumerate(label_lines):
         outstream.write('        <tspan x="0" y="%gem">%s</tspan>\n' % ((iline+1) * leading, line))
     outstream.write('      </text>\n')
@@ -63,9 +66,12 @@ def main():
     parser.add_argument("-g", "--horizontal-gap",
                         type=float, default=2.5,
                         help="""The horizontal gap between labels.""")
-    parser.add_argument("-v", "--vertical-gap",
+    parser.add_argument("-V", "--vertical-gap",
                         type=float, default=2.5,
                         help="""The vertical gap between labels.""")
+    parser.add_argument("-v", "--verbose",
+                        action='store_true',
+                        help="""Produce explanatory output.""")
     parser.add_argument("-b", "--box",
                         action='store_true',
                         help="""Draw a box around each label.""")
@@ -80,8 +86,12 @@ def main():
 
     left_margin = args.left_margin
     top_margin = args.top_margin
+    right_margin = left_margin
+    bottom_margin = top_margin
     label_width_with_gap = args.width + args.horizontal_gap
     label_height_with_gap = args.height + args.vertical_gap 
+    page_width = left_margin + label_width_with_gap * columns + right_margin
+    page_height = top_margin + label_height_with_gap * rows + bottom_margin
 
     config = {
         'outline': args.box,
@@ -91,17 +101,15 @@ def main():
         'vertical-gap': args.vertical_gap,
         'horizontal-gap': args.horizontal_gap,
         'label-left-margin': 5,
-        'label-top-margin': 0
+        'label-top-margin': 0,
+        'verbose': args.verbose
     }
     
-    row = 0
-    column = 0
-
     for ipage, page in enumerate(labels_to_pages(read_labels(args.input_file), rows * columns)):
         with open(args.output % ipage, 'w') as outstream:
-            begin_page(outstream,
-                       left_margin + label_width_with_gap * columns + left_margin,
-                       top_margin + label_height_with_gap * rows + top_margin)
+            row = 0
+            column = 0
+            begin_page(outstream, page_width, page_height)
             for label in page:
                 write_label_at(left_margin + column * label_width_with_gap,
                                top_margin + row * label_height_with_gap,
@@ -110,10 +118,10 @@ def main():
                                outstream)
                 row += 1
                 if row == rows:
+                    if args.verbose:
+                        print("next label below the last would be at", top_margin + row * label_height_with_gap)
                     row = 0
                     column += 1
-                    if column == columns:
-                        column = 0
             end_page(outstream)
     
 if __name__ == "__main__":
