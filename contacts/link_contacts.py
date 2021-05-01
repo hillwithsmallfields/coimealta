@@ -50,7 +50,7 @@ def accumulate(person, aspect, by_aspect):
 
 def print_summary(by_aspect, label):
     by_frequency = {}
-    for k, v in by_aspect.iteritems():
+    for k, v in by_aspect.items():
         frequency = len(v)
         if frequency not in by_frequency:
             by_frequency[frequency] = []
@@ -73,8 +73,12 @@ def main():
     by_title = {}
     by_place_met = {}
 
-    print("Reading contacts from", args.input)
-    by_id, by_name = contacts_data.read_contacts(args.input)
+    link_contacts_main(args.input, args.analyze, args.graph, args.output)
+
+def link_contacts_main(input_file, analyze, graph, output_file):
+
+    print("Reading contacts from", input_file)
+    by_id, by_name = contacts_data.read_contacts(input_file)
 
     for person in by_id.values():
         person['Parents'] = normalize_to_IDs(person['Parents'], by_name)
@@ -83,7 +87,7 @@ def main():
         person['Partners'] = normalize_to_IDs(person['Partners'], by_name)
         person['Knows'] = normalize_to_IDs(person['Knows'], by_name)
 
-    for person_id, person in by_id.iteritems():
+    for person_id, person in by_id.items():
         partner_ids = person['Partners']
         if len(partner_ids) == 1: # don't try this on non-monogamists
             partner = by_id[next(iter(partner_ids))]
@@ -104,8 +108,8 @@ def main():
                 sibling['Siblings'].add(person_id)
         # todo: mutualize contacts
 
-    if args.analyze:
-        for id, person in by_id.iteritems():
+    if analyze:
+        for id, person in by_id.items():
             accumulate(person, 'Nationality', by_nationality)
             accumulate(person, 'Gender', by_gender)
             accumulate(person, 'Title', by_title)
@@ -121,9 +125,9 @@ def main():
         print("%d ordained (%d%% of the people you know)" % (ordained, ordained*100 / n_people))
         print("%d with doctorates (%d%% of the people you know)" % (doctored, doctored * 100 / n_people))
 
-    if args.graph:
+    if graph:
         print("digraph {")
-        for id, person in by_id.iteritems():
+        for id, person in by_id.items():
             their_partners = person['Partners']
             their_offspring = person['Offspring']
             their_parents = person['Parents']
@@ -139,7 +143,7 @@ def main():
                 print("    ", id, "->", "{", ",".join(their_parents), "} [style=dashed]")
         print("}")
 
-    contacts_data.write_contacts(args.output, by_name)
+    contacts_data.write_contacts(output_file, by_name)
 
 if __name__ == "__main__":
     main()
