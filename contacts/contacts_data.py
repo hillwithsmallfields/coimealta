@@ -3,6 +3,7 @@ import csv
 import io
 import operator
 import random
+import re
 
 def count_grouped_titles(title_map, titles):
     """Count people with titles in a list of titles."""
@@ -31,9 +32,9 @@ multi_fields = ['Parents', 'Offspring', 'Siblings',
                 'Other groups']
 
 def make_name(person):
-    return ' '.join([person.get('Given name', "")]
-                    + person.get('Middle names', "").split()
-                    + [person.get('Surname', "")])
+    return ' '.join([(person.get('Given name', "") or "")]
+                    + (person.get('Middle names', "") or "").split()
+                    + [(person.get('Surname', "") or "")])
 
 def string_list_with_and(items):
     return ", ".join(items[:-1])+", and "+items[-1] if len(items) > 2 else items[0]+" and "+items[1] if len(items) == 2 else items[0]
@@ -63,6 +64,11 @@ def make_ID():
             + str(chr(random.randint(0, 9) + ord('0')))
             + str(chr(random.randint(0, 25) + ord('A')))
             + str(chr(random.randint(0, 9) + ord('0'))))
+
+def age_in_year(person, year):
+    bday = person.get('Birthday', "") or ""
+    match = re.match("[0-9][0-9][0-9][0-9]", bday)
+    return (year - int(match.group(0))) if match else None
 
 def read_contacts(filename):
     by_id = {}
@@ -104,7 +110,6 @@ def write_contacts(filename, by_name):
                 row[multi] = ' '.join(row[multi])
             del row['_name_']
             del row['_groups_']
-            contacts_writer.writerow(row)
             try:
                 contacts_writer.writerow(row)
             except ValueError:
