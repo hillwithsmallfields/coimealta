@@ -1,5 +1,5 @@
-# from backports import csv
 import csv
+import datetime
 import io
 import operator
 import random
@@ -12,7 +12,7 @@ def count_grouped_titles(title_map, titles):
 
 fieldnames = ['Given name', 'Middle names', 'Surname', 'Title', 'Old name', 'AKA',
               'Birthday', 'Died',
-              'First contact', 'Last contact',
+              'First contact', 'Last contact', 'In touch',
               'Gender',
               'ID', 'Parents', 'Offspring', 'Siblings', 'Partners', 'Ex-partners', 'Knows', 'Nationality',
               'Notes',
@@ -69,6 +69,93 @@ def age_in_year(person, year):
     bday = person.get('Birthday', "") or ""
     match = re.match("[0-9][0-9][0-9][0-9]", bday)
     return (year - int(match.group(0))) if match else None
+
+def birthday(person, this_year):
+    bday_string = person.get('Birthday', "") or ""
+    if bday_string == "":
+        return False
+    try:
+        bday = datetime.date.fromisoformat(bday_string)
+    except Exception:
+        match = re.search("-([0-9][0-9])-([0-9][0-9])", bday_string)
+        if match:
+            month = int(match.group(1))
+            if month == 0:
+                return False
+            day = int(match.group(2))
+            if day == 0:
+                return False
+            bday = datetime.date(year=this_year, month=month, day=day)
+        else:
+            return False
+    bday = bday.replace(year=this_year)
+    return bday
+
+def birthday_soon(person, this_year, today):
+    bday = birthday(person, this_year)
+    if not bday:
+        return False
+    interval_to_birthday = (bday - today).days
+    return interval_to_birthday >= 0 and interval_to_birthday < 30
+
+def last_contacted(person):
+    cday_string = person.get('In touch', "")
+    if not cday_string:
+        return None
+    try:
+        cday = datetime.date.fromisoformat(cday_string)
+    except:
+        match = re.search("([0-9][0-9][0-9][0-9])-([0-9][0-9])", cday_string)
+        if match:
+            year = int(match.group(1))
+            if year == 0:
+                return False
+            month = int(match.group(2))
+            if month == 0:
+                month = 1
+            cday = datetime.date(year=year, month=month, day=1)
+        else:
+            match = re.search("([0-9][0-9][0-9][0-9])", cday_string)
+            if match:
+                cday = datetime.date(year=int(match.group(1)), month=1, day=1)
+            else:
+                return None
+    return cday
+
+def contact_soon(person, today):
+    cday = last_contacted(person)
+    return cday and (today - cday).days > 45
+
+def age_string(person, year):
+    age = age_in_year(person, year)
+    return str(age) if age else "?"
+
+def by_name(name, people):
+    return people.get(name)
+
+def set_field_if_empty(name, field, value):
+    record = by_name(name)
+    if record and (field not in record or record[field] == ""):
+        record[field] = value
+        return True
+    return False
+
+def set_field_if_greater(name, field, value):
+    record = by_name(name)
+    if (record
+        and (field not in record
+             or record[field] == ""
+             or value > record[field])):
+        record[field] = value
+        return True
+    return False
+
+def set_field(name, field, value):
+    record = by_name(name)
+    if record:
+        record[field] = value
+        return True
+    return False
 
 def read_contacts(filename):
     by_id = {}
