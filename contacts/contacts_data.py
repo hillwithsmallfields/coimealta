@@ -1,5 +1,6 @@
 import csv
 import datetime
+import functools
 import io
 import operator
 import random
@@ -7,8 +8,8 @@ import re
 
 def count_grouped_titles(title_map, titles):
     """Count people with titles in a list of titles."""
-    return reduce(operator.add,
-                  [len(title_map[title]) for title in titles])
+    return functools.reduce(operator.add,
+                            [len(title_map[title]) for title in titles])
 
 fieldnames = ['Given name', 'Middle names', 'Surname', 'Title', 'Old name', 'AKA',
               'Birthday', 'Died',
@@ -91,12 +92,12 @@ def birthday(person, this_year):
     bday = bday.replace(year=this_year)
     return bday
 
-def birthday_soon(person, this_year, today):
+def birthday_soon(person, this_year, today, within_days=30):
     bday = birthday(person, this_year)
     if not bday:
         return False
     interval_to_birthday = (bday - today).days
-    return interval_to_birthday >= 0 and interval_to_birthday < 30
+    return interval_to_birthday >= 0 and interval_to_birthday < within_days
 
 def last_contacted(person):
     cday_string = person.get('In touch', "")
@@ -122,38 +123,50 @@ def last_contacted(person):
                 return None
     return cday
 
-def contact_soon(person, today):
+def contact_soon(person, today, days_since_last_contact=90):
+    """Return whether I haven't registered a contact with someone in a given time."""
     cday = last_contacted(person)
-    return cday and (today - cday).days > 45
+    # TODO: have a contact frequency field in the data for each person
+    return cday and (today - cday).days > days_since_last_contact
+
+def record_contact(person, date=None):
+    """Record that I have contacted someone on a given date."""
+    if date is None:
+        date = datetime.date.today()
+    set_field_if_greater(person, "last-contacted", date)
+    set_field_if_not_empty(person, "keep-in-touch", date)
 
 def age_string(person, year):
     age = age_in_year(person, year)
     return str(age) if age else "?"
 
-def by_name(name, people):
+def by_name(people, name):
     return people.get(name)
 
-def set_field_if_empty(name, field, value):
-    record = by_name(name)
-    if record and (field not in record or record[field] == ""):
-        record[field] = value
+def set_field_if_empty(person, field, value):
+    if person and (field not in person or person[field] == ""):
+        person[field] = value
         return True
     return False
 
-def set_field_if_greater(name, field, value):
-    record = by_name(name)
-    if (record
-        and (field not in record
-             or record[field] == ""
-             or value > record[field])):
-        record[field] = value
+def set_field_if_not_empty(person, field, value):
+    if person and (field in person and person[field] != ""):
+        person[field] = value
         return True
     return False
 
-def set_field(name, field, value):
-    record = by_name(name)
-    if record:
-        record[field] = value
+def set_field_if_greater(person, field, value):
+    if (person
+        and (field not in person
+             or person[field] == ""
+             or value > person[field])):
+        person[field] = value
+        return True
+    return False
+
+def set_field(person, field, value):
+    if person:
+        person[field] = value
         return True
     return False
 

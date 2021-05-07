@@ -17,10 +17,10 @@ def siblings(person):
     return person['Siblings']
 
 def normalize_to_IDs(people, by_name):
-    return set([ (person
-                  if re.match("[G-Z][0-9][A-Z][0-9]", person)
-                  else by_name[person.replace('_', ' ')]['ID'])
-                 for person in people ])
+    return set([(person
+                 if re.match("[G-Z][0-9][A-Z][0-9]", person)
+                 else by_name[person.replace('_', ' ')]['ID'])
+                for person in people])
 
 def find_siblings(person, by_id):
     sibs = person['Siblings']
@@ -46,7 +46,7 @@ def accumulate(person, aspect, by_aspect):
     aspect = person[aspect]
     if aspect not in by_aspect:
         by_aspect[aspect] = []
-    by_aspect[aspect].append(id)
+    by_aspect[aspect].append(person['ID'])
 
 def print_summary(by_aspect, label):
     by_frequency = {}
@@ -61,6 +61,21 @@ def print_summary(by_aspect, label):
              for bf in sorted(by_frequency[freq])])
           for freq in reversed(sorted(by_frequency.keys()))]))
 
+def analyze_contacts(by_id):
+    by_nationality = {}
+    by_gender = {}
+    by_title = {}
+    by_place_met = {}
+    for id, person in by_id.items():
+        accumulate(person, 'Nationality', by_nationality)
+        accumulate(person, 'Gender', by_gender)
+        accumulate(person, 'Title', by_title)
+        accumulate(person, 'Place met', by_place_met)
+    n_people = len(by_id)
+    ordained = contacts_data.count_grouped_titles(by_title, ["Revd", "Revd Dr", "Revd Prof", "RtRevd"])
+    doctored = contacts_data.count_grouped_titles(by_title, ["Dr", "Revd Dr", "Prof", "Revd Prof"])
+    return n_people, by_gender, by_nationality, by_place_met, by_title, ordained, doctored
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--analyze", action='store_true')
@@ -68,10 +83,6 @@ def main():
     parser.add_argument("input")
     parser.add_argument("output")
     args = parser.parse_args()
-    by_nationality = {}
-    by_gender = {}
-    by_title = {}
-    by_place_met = {}
 
     link_contacts_main(args.input, args.analyze, args.graph, args.output)
 
@@ -108,22 +119,7 @@ def link_contacts_main(input_file, analyze, graph, output_file):
                 sibling['Siblings'].add(person_id)
         # todo: mutualize contacts
 
-    if analyze:
-        for id, person in by_id.items():
-            accumulate(person, 'Nationality', by_nationality)
-            accumulate(person, 'Gender', by_gender)
-            accumulate(person, 'Title', by_title)
-            accumulate(person, 'Place met', by_place_met)
-        n_people = len(by_id)
-        print(n_people, "people")
-        print_summary(by_nationality, "nationalities:")
-        print_summary(by_gender, "genders:")
-        print_summary(by_title, "titles:")
-        print_summary(by_place_met, "places met:")
-        ordained = contacts_data.count_grouped_titles(by_title, ["Revd", "Revd Dr", "Revd Prof", "RtRevd"])
-        doctored = contacts_data.count_grouped_titles(by_title, ["Dr", "Revd Dr", "Prof", "Revd Prof"])
-        print("%d ordained (%d%% of the people you know)" % (ordained, ordained*100 / n_people))
-        print("%d with doctorates (%d%% of the people you know)" % (doctored, doctored * 100 / n_people))
+    contacts_data.write_contacts(output_file, by_name)
 
     if graph:
         print("digraph {")
@@ -143,7 +139,26 @@ def link_contacts_main(input_file, analyze, graph, output_file):
                 print("    ", id, "->", "{", ",".join(their_parents), "} [style=dashed]")
         print("}")
 
-    contacts_data.write_contacts(output_file, by_name)
+    if analyze:
+        n_people, by_gender, by_nationality, by_place_met, by_title, ordained, doctored = analyze_contacts(by_id)
+        print(n_people, "people")
+        print_summary(by_nationality, "nationalities:")
+        print_summary(by_gender, "genders:")
+        print_summary(by_title, "titles:")
+        print_summary(by_place_met, "places met:")
+        print("%d ordained (%d%% of the people you know)" % (ordained, ordained*100 / n_people))
+        print("%d with doctorates (%d%% of the people you know)" % (doctored, doctored * 100 / n_people))
+        return {
+            "n_people": n_people,
+            "by_gender": by_gender,
+            "by_nationality": by_nationality,
+            "by_place_met": by_place_met,
+            "by_title": by_title,
+            "ordained": ordained,
+            "doctored": doctored
+        }
+    else:
+        return None
 
 if __name__ == "__main__":
     main()
