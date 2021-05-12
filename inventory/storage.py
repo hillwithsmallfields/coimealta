@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import client_server # the shell script ../storage makes this available
 import csv
 import decouple
 import functools
@@ -13,6 +12,13 @@ import re
 import shlex
 import sys
 # import yaml
+
+source_dir = os.path.dirname(os.path.realpath(__file__))
+# This corresponds to https://github.com/hillwithsmallfields
+my_projects = os.path.dirname(os.path.dirname(source_dir))
+sys.path.append(os.path.join(my_projects, "Simple_client_server"))
+
+import client_server # the shell script ../storage makes this available
 
 def normalize_book_entry(row):
     ex_libris = row['Number']
@@ -256,35 +262,39 @@ def sum_capacities(all_data, types):
 # the 10 is because a liter is a decimeter along each side
 bookshelf_area = 10 * 2 * 1.5
 
-def capacities(outstream, _args, locations, _items, _books):
-    """Analyze the storage capacities.
-Shows how much of each type of storage there is, and also a summary
-combining the types."""
+def calculate_capacities(locations):
     capacity_by_type = {}
     for location in locations.values():
         loctype = location['Type'].lower()
         locsize = location['Size'].lower()
         if loctype != "" and locsize != "":
             capacity_by_type[loctype] = float(capacity_by_type.get(loctype, 0)) + float(locsize)
-    for loctype in sorted(capacity_by_type.keys()):
-        label_width = max(*map(len, capacity_by_type.keys()))
-        outstream.write(loctype.rjust(label_width) + " " + str(math.ceil(capacity_by_type[loctype])) + "\n")
     volume = sum_capacities(capacity_by_type, ('box', 'crate',
                                                'drawer', 'cupboard'))
     bookshelf_length = sum_capacities(capacity_by_type, ('bookshelf', 'bookshelves'))
     other_length = sum_capacities(capacity_by_type, ('shelf', 'shelves',
                                                      'cupboard shelf', 'racklevel'))
     area = sum_capacities(capacity_by_type, ('louvre panel', 'pegboard'))
-    outstream.write("Total container volume: " + str(volume) + " litres\n")
-    outstream.write("Total container and book (estimate) volume: "
-                    + str(volume + bookshelf_length * bookshelf_area)
-                    + " litres\n")
-    outstream.write("Total shelving length: "
-                    + str(bookshelf_length + other_length)
-                    + " metres\n")
-    outstream.write("Total panel area: "
-                    + str(area)
-                    + " square metres\n")
+    return capacity_by_type, volume, bookshelf_length, other_length, area
+
+def capacities(outstream, _args, locations, _items, _books):
+    """Analyze the storage capacities.
+Shows how much of each type of storage there is, and also a summary
+combining the types."""
+    capacity_by_type, volume, bookshelf_length, other_length, area = calculate_capacities(locations)
+    for loctype in sorted(capacity_by_type.keys()):
+        label_width = max(*map(len, capacity_by_type.keys()))
+        outstream.write(loctype.rjust(label_width) + " " + str(math.ceil(capacity_by_type[loctype])) + "\n")
+        outstream.write("Total container volume: " + str(volume) + " litres\n")
+        outstream.write("Total container and book (estimate) volume: "
+                        + str(volume + bookshelf_length * bookshelf_area)
+                        + " litres\n")
+        outstream.write("Total shelving length: "
+                        + str(bookshelf_length + other_length)
+                        + " metres\n")
+        outstream.write("Total panel area: "
+                        + str(area)
+                        + " square metres\n")
     return True
 
 def list_location(outstream, location, prefix, locations, items, books):
