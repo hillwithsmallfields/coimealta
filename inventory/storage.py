@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import cmd
 import csv
 import decouple
 import functools
@@ -19,6 +20,157 @@ my_projects = os.path.dirname(os.path.dirname(source_dir))
 sys.path.append(os.path.join(my_projects, "Simple_client_server"))
 
 import client_server # the shell script ../storage makes this available
+
+class StorageShell(cmd.Cmd):
+
+    prompt = "Storage> "
+
+    def __init__(self, outstream, locations, items, books):
+        super().__init__()
+        self.outstream = outstream
+        self.locations = locations
+        self.items = items
+        self.books = books
+
+    def postcmd(self, stop, _line):
+        return stop
+
+    def do_list_books(self, *_args):
+        """Show a table of where all the books are."""
+        by_location = {}
+        for idx, book in self.books.items():
+            if 'Location' in book:
+                loc = book['Location']
+                if loc in by_location:
+                    by_location[loc].append(idx)
+                else:
+                    by_location[loc] = [idx]
+        for loc, contents in by_location.items():
+            self.outstream.write(describe_nested_location(self.locations, loc) + ":\n")
+            for title in sorted([self.books[idx]['Title'] for idx in contents ]):
+                self.outstream.write("    " + title + "\n")
+        return False
+
+    def do_capacities(self, *_args):
+        """Analyze the storage capacities.
+    Shows how much of each type of storage there is, and also a summary
+    combining the types."""
+        capacity_by_type, volume, bookshelf_length, other_length, area = calculate_capacities(self.locations)
+        for loctype in sorted(capacity_by_type.keys()):
+            label_width = max(*map(len, capacity_by_type.keys()))
+        self.outstream.write(loctype.rjust(label_width) + " " + str(math.ceil(capacity_by_type[loctype])) + "\n")
+        self.outstream.write("Total container volume: " + str(volume) + " litres\n")
+        self.outstream.write("Total container and book (estimate) volume: "
+                             + str(volume + bookshelf_length * bookshelf_area)
+                             + " litres\n")
+        self.outstream.write("Total shelving length: "
+                             + str(bookshelf_length + other_length)
+                             + " metres\n")
+        self.outstream.write("Total panel area: "
+                             + str(area)
+                             + " square metres\n")
+        return False
+
+    def do_counts(self, *_args):
+        """Count how many of each type of thing I have."""
+        # todo: maybe do the books here as well?
+        types = {}
+        for item in self.items.values():
+            item_type = item['Type']
+            if item_type not in types:
+                types[item_type] = {}
+            subtypes = types[item_type]
+            item_subtype = item['Subtype']
+            if item_subtype in subtypes:
+                subtypes[item_subtype] += 1
+            else:
+                subtypes[item_subtype] = 1
+        for item_type in sorted(types.keys()):
+            subtypes = types[item_type]
+            self.outstream.write((item_type if item_type != "" else "unspecified")
+                            + ": "
+                            + str(functools.reduce(operator.add, subtypes.values()))
+                            + "\n")
+            for subtype in sorted([k for k in subtypes.keys() if k is not None ]):
+                self.outstream.write("    "
+                                     + (subtype
+                                        if subtype != "" and subtype is not None
+                                        else "unspecified")
+                                     + ": "
+                                     + str(subtypes[subtype])
+                                     + "\n")
+        return False
+
+    def do_list_items(self, *args):
+        """Show a table of where all the items are."""
+        # todo: option to print table of where all inventory items are
+        by_location = {}
+        for idx, item in self.items.items():
+            if 'Normal location' in item:
+                loc = item['Normal location']
+                if loc in by_location:
+                    by_location[loc].append(idx)
+                else:
+                    by_location[loc] = [idx]
+        for loc, contents in by_location.items():
+            self.outstream.write(describe_nested_location(self.locations, loc) + ":\n")
+            for title in sorted([self.items[idx]['Item'] for idx in contents ]):
+                self.outstream.write("    " + title + "\n")
+        return False
+
+    def do_name_completions(self, *things):
+        """Return the names matching a fragment."""
+        if len(things) == 0:
+            return ""
+        fragment = things[0]
+        self.outstream.write(json.dumps(sorted(
+            [book['Title']
+              for book in self.books.values()
+              if fragment in book['Title']]
+            + [item['Item']
+               for item in self.items.values()
+               if fragment in item['Item']]))
+                             + "\n")
+
+    def do_location_completions(self, *things):
+        """Return the location names matching a fragment."""
+        if len(things) == 0:
+            return ""
+        fragment = things[0]
+        self.outstream.write(json.dumps(sorted(
+            [location['Description']
+             for location in self.locations.values()
+             if fragment in location['Description']]))
+            + "\n")
+        return False
+
+    def do_quit(self, _args):
+        """Stop the CLI."""
+        return True
+
+    def do_list_locations(self, *things):
+        """List everything that is in the matching locations."""
+        for where in locations_matching_patterns(self.locations, things):
+            list_location(self.outstream, where, "", self.locations, self.items, self.books)
+        return False
+
+    def do_find_things(self, *args):
+        """Show the locations of things.
+        This finds books, other items, and locations."""
+        print("Looking for", *args)
+        findings = {}
+        for thing in args:
+            if re.match("[0-9]+", thing):
+                as_location = describe_nested_location(self.locations, thing)
+                if as_location != []:
+                    findings[thing] = as_location
+            for book in books_matching(self.books, thing):
+                findings[book['Title']] = describe_nested_location(self.locations, book['Location'])
+            for item in items_matching(self.items, thing):
+                findings[item['Item']] = describe_nested_location(self.locations, item['Normal location'])
+        for finding in sorted(findings.keys()):
+            self.outstream.write(finding + " is " + findings[finding] + "\n")
+        return False
 
 def normalize_book_entry(row):
     ex_libris = row['Number']
@@ -43,32 +195,16 @@ def read_books(books_file, _key=None):
 
 def book_matches(book, pattern):
     pattern = re.compile(pattern , re.IGNORECASE)
-    return (pattern.search(book['Title'])
-            or pattern.search(book['Authors'])
-            or pattern.search(book['Publisher'])
-            or pattern.search(book['ISBN'])
-            or pattern.search(book['Area']))
+    return (book['Title'] and pattern.search(book['Title'])
+            or book['Authors'] and pattern.search(book['Authors'])
+            or book['Publisher'] and pattern.search(book['Publisher'])
+            or book['ISBN'] and pattern.search(book['ISBN'])
+            or book['Area'] and pattern.search(book['Area']))
 
 def books_matching(book_index, pattern):
-    return [ book
-             for book in book_index.values()
-             if book_matches(book, pattern) ]
-
-def list_books(outstream, _args, locations, _items, books):
-    """Show a table of where all the books are."""
-    by_location = {}
-    for idx, book in books.items():
-        if 'Location' in book:
-            loc = book['Location']
-            if loc in by_location:
-                by_location[loc].append(idx)
-            else:
-                by_location[loc] = [idx]
-    for loc, contents in by_location.items():
-        outstream.write(describe_nested_location(locations, loc) + ":\n")
-        for title in sorted([ books[idx]['Title'] for idx in contents ]):
-            outstream.write("    " + title + "\n")
-    return True
+    return [book
+            for book in book_index.values()
+            if book_matches(book, pattern) ]
 
 unlabelled = -1
 
@@ -92,7 +228,7 @@ def read_inventory(inventory_file, _key=None):
         with io.open(inventory_file, 'r', encoding='utf-8') as instream:
             return { item['Label number']: item
                      for item in map(normalize_item_entry,
-                                     [ row
+                                     [row
                                        for row in csv.DictReader(instream) ])}
     else:
         return {}
@@ -107,40 +243,9 @@ def item_matches(item, pattern):
             or (item['Subtype'] and pattern.search(item['Subtype'])))
 
 def items_matching(inventory_index, pattern):
-    return [ item
+    return [item
              for item in inventory_index.values()
              if item_matches(item, pattern) ]
-
-def list_items(outstream, args, locations, items, books):
-    """Show a table of where all the items are."""
-    # todo: option to print table of where all inventory items are
-    by_location = {}
-    for idx, item in items.items():
-        if 'Normal location' in item:
-            loc = item['Normal location']
-            if loc in by_location:
-                by_location[loc].append(idx)
-            else:
-                by_location[loc] = [idx]
-    for loc, contents in by_location.items():
-        outstream.write(describe_nested_location(locations, loc) + ":\n")
-        for title in sorted([ items[idx]['Item'] for idx in contents ]):
-            outstream.write("    " + title + "\n")
-    return True
-
-def name_completions(outstream, things, _locations, items, books):
-    """Return the names matching a fragment."""
-    if len(things) == 0:
-        return ""
-    fragment = things[0]
-    outstream.write(json.dumps(sorted(
-        [ book['Title']
-          for book in books.values()
-          if fragment in book['Title'] ]
-        + [ item['Item']
-            for item in items.values()
-            if fragment in item['Item'] ]))
-                    + "\n")
 
 def normalize_location(row):
     contained_within = row['ContainedWithin']
@@ -159,7 +264,7 @@ def normalize_location(row):
 def read_locations(locations_file, _key=None):
     with io.open(locations_file, 'r', encoding='utf-8') as instream:
         return { location['Number']: location
-                 for location in [ normalize_location(row)
+                 for location in [normalize_location(row)
                                    for row in csv.DictReader(instream)
                                    if row['Number'] is not None ] }
 
@@ -169,11 +274,11 @@ def read_locations(locations_file, _key=None):
 def locations_matching(locations_index, pattern):
     """Return a list of location numbers for locations that match a regexp."""
     if pattern == "all":
-        return [ loc['Number']
+        return [loc['Number']
                  for loc in locations_index.values() ]
     else:
         pattern = re.compile(pattern, re.IGNORECASE)
-        return [ loc['Number']
+        return [loc['Number']
                  for loc in locations_index.values()
                  if pattern.search(loc['Description']) ]
 
@@ -208,15 +313,18 @@ def describe_location(where):
 
 def nested_location(locations, location):
     result = []
-    location = int(location)
-    while location:
-        if location not in locations:
-            break
-        where = locations[location]
-        description = describe_location(where)
-        result.append(description)
-        location = where['ContainedWithin']
-    return result
+    try:
+        location = int(location)
+        while location:
+            if location not in locations:
+                break
+            where = locations[location]
+            description = describe_location(where)
+            result.append(description)
+            location = where['ContainedWithin']
+        return result
+    except:
+        return ["Could not follow location %s" % location]
 
 def describe_nested_location(locations, location):
     """Return a description of a location, along with any surrounding locations."""
@@ -224,39 +332,10 @@ def describe_nested_location(locations, location):
             if location != ""
             else "unknown")
 
-def counts(outstream, _args, _locations, items, _books):
-    """Count how many of each type of thing I have."""
-    # todo: maybe do the books here as well?
-    types = {}
-    for item in items.values():
-        item_type = item['Type']
-        if item_type not in types:
-            types[item_type] = {}
-        subtypes = types[item_type]
-        item_subtype = item['Subtype']
-        if item_subtype in subtypes:
-            subtypes[item_subtype] += 1
-        else:
-            subtypes[item_subtype] = 1
-    for item_type in sorted(types.keys()):
-        subtypes = types[item_type]
-        outstream.write((item_type if item_type != "" else "unspecified")
-                        + ": "
-                        + str(functools.reduce(operator.add, subtypes.values()))
-                        + "\n")
-        for subtype in sorted([ k for k in subtypes.keys() if k is not None ]):
-            outstream.write("    "
-                            + (subtype
-                               if subtype != "" and subtype is not None
-                               else "unspecified")
-                            + ": "
-                            + str(subtypes[subtype])
-                            + "\n")
-
 def sum_capacities(all_data, types):
     return math.ceil(functools.reduce(operator.add,
-                                      [ all_data.get(loctype, 0)
-                                        for loctype in types ]))
+                                      [all_data.get(loctype, 0)
+                                       for loctype in types ]))
 
 # factor to convert meter of bookshelf to litre of books
 # the 10 is because a liter is a decimeter along each side
@@ -276,26 +355,6 @@ def calculate_capacities(locations):
                                                      'cupboard shelf', 'racklevel'))
     area = sum_capacities(capacity_by_type, ('louvre panel', 'pegboard'))
     return capacity_by_type, volume, bookshelf_length, other_length, area
-
-def capacities(outstream, _args, locations, _items, _books):
-    """Analyze the storage capacities.
-Shows how much of each type of storage there is, and also a summary
-combining the types."""
-    capacity_by_type, volume, bookshelf_length, other_length, area = calculate_capacities(locations)
-    for loctype in sorted(capacity_by_type.keys()):
-        label_width = max(*map(len, capacity_by_type.keys()))
-        outstream.write(loctype.rjust(label_width) + " " + str(math.ceil(capacity_by_type[loctype])) + "\n")
-        outstream.write("Total container volume: " + str(volume) + " litres\n")
-        outstream.write("Total container and book (estimate) volume: "
-                        + str(volume + bookshelf_length * bookshelf_area)
-                        + " litres\n")
-        outstream.write("Total shelving length: "
-                        + str(bookshelf_length + other_length)
-                        + " metres\n")
-        outstream.write("Total panel area: "
-                        + str(area)
-                        + " square metres\n")
-    return True
 
 def list_location(outstream, location, prefix, locations, items, books):
     """List everything that is in the given location."""
@@ -326,77 +385,10 @@ def list_location(outstream, location, prefix, locations, items, books):
             outstream.write(next_prefix + subloc['Description'] + "\n")
             list_location(outstream, subloc, next_prefix, locations, items, books)
 
-def list_locations(outstream, things, locations, items, books):
-    """List everything that is in the matching locations."""
-    for where in locations_matching_patterns(locations, things):
-        list_location(outstream, where, "", locations, items, books)
-
-def location_completions(outstream, things, locations, _items, _books):
-    """Return the location names matching a fragment."""
-    if len(things) == 0:
-        return ""
-    fragment = things[0]
-    outstream.write(json.dumps(sorted(
-        [ location['Description']
-          for location in locations.values()
-          if fragment in location['Description'] ]))
-                    + "\n")
-
-def find_things(outstream, args, locations, items, books):
-    """Show the locations of things.
-This finds books, other items, and locations."""
-    findings = {}
-    for thing in args:
-        if re.match("[0-9]+", thing):
-            as_location = describe_nested_location(locations, thing)
-            if as_location != []:
-                findings[thing] = as_location
-        for book in books_matching(books, thing):
-            findings[book['Title']] = describe_nested_location(locations, book['Location'])
-        for item in items_matching(items, thing):
-            findings[item['Item']] = describe_nested_location(locations, item['Normal location'])
-    for finding in sorted(findings.keys()):
-        outstream.write(finding + " is " + findings[finding] + "\n")
-    return True
-
-def cmd_help(outstream, args, _locations, _items, _books):
-    """Display some help."""
-    if len(args) == 0:
-        outstream.write("Commands are:\n")
-        max_command_length = max(*map(len, commands.keys()))
-        for command in sorted(commands.keys()):
-            outstream.write("  " + command.rjust(max_command_length)
-                            + ": " + commands[command].__doc__.split('\n')[0] + "\n")
-    else:
-        for topic in args:
-            if topic in commands:
-                outstream.write(topic + ":\n" + commands[topic].__doc__ + "\n")
-            else:
-                outstream.write(topic + ":\n" + topic
-                                + """ is not a command.  Type "help" for a list of commands.\n""")
-    return True
-
-def cmd_quit(_outstream, _args, _locations, _items, _books):
-    """Stop the CLI."""
-    return False
-
 def cmd_bad(outstream, _args, _locations, _items, _books):
     """Report an invalid command."""
     outstream.write("""Bad command; enter "help" to get a list of commands\n""")
     return True
-
-commands = {
-    'books': list_books,
-    'capacities': capacities,
-    'counts': counts,
-    'help': cmd_help,
-    'items': list_items,
-    'names': name_completions,
-    'places': location_completions,
-    'quit': cmd_quit,
-    'what': list_locations,
-    'where': find_things
-}
 
 def run_command(outstream,
                 command,
@@ -409,21 +401,6 @@ def run_command(outstream,
                                           locations,
                                           items,
                                           books)
-
-def cli(instream, outstream, prompt, locations, items, books):
-    """Run a command loop using stdin and stdout."""
-    while True:
-        if prompt:
-            outstream.write(prompt)
-        line_parts = shlex.split(instream.readline().strip())
-        if len(line_parts) == 0:
-            continue
-        if not run_command(outstream,
-                           line_parts[0],
-                           line_parts[1:],
-                           locations,
-                           items, books):
-            break
 
 filenames = {}
 
@@ -453,6 +430,10 @@ def storage_server_function(in_string, files_data):
         else:
             items_data = remembered_items_data['combined']
         output_catcher = io.StringIO()
+        StorageShell(output_catcher,
+                     files_data[filenames['locations']],
+                     items_data,
+                     files_data[filenames['books']]).onecmd(in_string)
         run_command(output_catcher,
                     command_parts[0],
                     command_parts[1:],
@@ -533,7 +514,7 @@ def main():
         items.update(read_inventory(args.project_parts))
         books = read_books(args.books)
         if args.cli:
-            cli(sys.stdin, sys.stdout, "storage> ", locations, items, books)
+            StorageShell(sys.stdout, locations, items, books).cmdloop()
         else:
             if args.things[0] in commands:
                 run_command(sys.stdout, args.things[0], args.things[1:],
