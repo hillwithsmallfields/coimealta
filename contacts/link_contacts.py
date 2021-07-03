@@ -58,7 +58,7 @@ def print_summary(by_aspect, label):
     print(label, "; ".join(
         [ "; ".join(
             ["%s(%d)" % (bf, freq)
-             for bf in sorted(by_frequency[freq])])
+             for bf in sorted(by_frequency[freq], key=lambda x: x if x else "")])
           for freq in reversed(sorted(by_frequency.keys()))]))
 
 def analyze_contacts(by_id):
