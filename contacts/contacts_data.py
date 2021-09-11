@@ -1,7 +1,6 @@
 import csv
 import datetime
 import functools
-import io
 import operator
 import random
 import re
@@ -35,6 +34,10 @@ multi_fields = ['Parents', 'Offspring', 'Siblings',
 def make_name(person):
     return ' '.join([(person.get('Given name', "") or "")]
                     + (person.get('Middle names', "") or "").split()
+                    + [(person.get('Surname', "") or "")])
+
+def make_short_name(person):
+    return ' '.join([(person.get('Given name', "") or "")]
                     + [(person.get('Surname', "") or "")])
 
 def string_list_with_and(items):
@@ -174,12 +177,15 @@ def read_contacts(filename):
     by_id = {}
     by_name = {}
     without_id = []
-    with io.open(filename, 'r', encoding='utf-8') as instream:
+    with open(filename) as instream:
         contacts_reader = csv.DictReader(instream)
         for row in contacts_reader:
             n = make_name(row)
+            sn = make_short_name(row)
             row['_name_'] = n
             by_name[n] = row
+            if sn != n:
+                by_name[sn] = row
             uid = row.get('ID', "")
             if uid is not None and uid != "":
                 by_id[uid] = row
@@ -200,16 +206,20 @@ def read_contacts(filename):
     return by_id, by_name
 
 def write_contacts(filename, by_name):
-    with io.open(filename, 'w', encoding='utf-8') as output:
+    with open(filename, 'w') as output:
         contacts_writer = csv.DictWriter(output, fieldnames)
         contacts_writer.writeheader()
         for nm in sorted(by_name.keys()):
             row = by_name[nm]
             # print row
             for multi in multi_fields:
+                # print("converting", multi, row[multi])
                 row[multi] = ' '.join(row[multi])
-            del row['_name_']
-            del row['_groups_']
+                # print("converted", multi, row[multi])
+            if '_name_' in row:
+                del row['_name_']
+            if '_groups_' in row:
+                del row['_groups_']
             try:
                 contacts_writer.writerow(row)
             except ValueError:

@@ -4,10 +4,45 @@
 
 import argparse
 import csv
+import datetime
+import os
+
+import contacts_data
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--contacts",
+                        help="""The contacts file to read and write.""")
+    parser.add_argument("--keep-in-touch", "-k",
+                        action='store_true',
+                        help="""If the contacts are not in the keep-in-touch column,
+                        add them to it.""")
+    parser.add_argument("--date", "-d",
+                        help="""The date of contact.""")
+    parser.add_argument("--verbose", "-v",
+                        action='store_true',
+                        help="""Narrate what is happening""")
+    parser.add_argument("people", nargs='*')
     args = parser.parse_args()
+
+    contacts_file = args.contacts or os.path.expandvars("$COMMON/org/contacts.csv")
+
+    by_id, by_name = contacts_data.read_contacts(contacts_file)
+
+    contact_date = datetime.date.fromisoformat(args.date) if args.date else datetime.date.today()
+
+    for person in args.people:
+        row = by_name[person] if person in by_name else by_id[person] if person in by_id else None
+        if row is None:
+            print("Could not find", person)
+            continue
+        if args.verbose:
+            print(person, row)
+        row['Last contact'] = contact_date
+        if args.keep_in_touch or row['In touch'] != "":
+            row['In touch'] = contact_date
+
+    contacts_data.write_contacts(contacts_file, by_name)
 
 if __name__ == '__main__':
     main()
