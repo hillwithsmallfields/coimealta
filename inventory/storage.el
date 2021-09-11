@@ -60,6 +60,23 @@
    (t
     0)))
 
+(defvar field-names nil
+  "The field names for this buffer.
+Local to each buffer.")
+
+(make-variable-buffer-local 'field-names)
+
+(defun storage-get-column-names ()
+  "Get the column names of this file."
+  (interactive)
+  (save-excursion
+    (goto-char (point-min))
+    (setq field-names (split-string
+                       (buffer-substring-no-properties
+                        (point) (line-end-position))
+                       ",")))
+  field-names)
+
 (defun storage-read-csv (filename table
                                   name-field-name location-field-name
                                   &optional index-table index-field-name)
@@ -70,10 +87,7 @@ pair into that table using that column."
   (find-file filename)
   (save-excursion
     (goto-char (point-min))
-    (let* ((column-names (split-string
-                          (buffer-substring-no-properties
-                           (point) (line-end-position))
-                          ","))
+    (let* ((column-names (storage-get-column-names))
            (name-field-number (position name-field-name column-names :test 'string=))
            (index-field-number (if index-field-name
                                    (position index-field-name column-names :test 'string=)
@@ -97,33 +111,39 @@ pair into that table using that column."
 (defun storage-read-tables ()
   "Read the storage tables."
   (interactive)
-  (setq storage-inventory-table (make-hash-table :test 'equal))
-  (storage-read-csv storage-inventory-filename
-                    storage-inventory-table
-                    "Item" "Normal location")
-  (storage-read-csv storage-books-filename
-                    storage-inventory-table
-                    "Title" "Location")
-  (storage-read-csv storage-project-parts-filename
-                    storage-inventory-table
-                    "Item" "Normal location")
-  (storage-read-csv storage-stock-filename
-                    storage-inventory-table
-                    "Item" "Normal location")
-  (setq storage-locations-table (make-hash-table :test 'equal))
-  (setq storage-locations-index-table (make-hash-table))
-  (storage-read-csv storage-locations-filename
-                    storage-locations-table
-                    "Description" "ContainedWithin"
-                    storage-locations-index-table "Number"))
+  (save-window-excursion
+    (save-excursion
+      (setq storage-inventory-table (make-hash-table :test 'equal))
+      (storage-read-csv storage-inventory-filename
+                        storage-inventory-table
+                        "Item" "Normal location")
+      (storage-read-csv storage-books-filename
+                        storage-inventory-table
+                        "Title" "Location")
+      (storage-read-csv storage-project-parts-filename
+                        storage-inventory-table
+                        "Item" "Normal location")
+      (storage-read-csv storage-stock-filename
+                        storage-inventory-table
+                        "Item" "Normal location")
+      (setq storage-locations-table (make-hash-table :test 'equal))
+      (setq storage-locations-index-table (make-hash-table))
+      (storage-read-csv storage-locations-filename
+                        storage-locations-table
+                        "Description" "ContainedWithin"
+                        storage-locations-index-table "Number"))))
 
 (defun storage-completing-read-item (prompt)
   "Read an item name, using PROMPT."
+  (unless storage-inventory-table
+    (storage-read-tables))
   (let ((completion-ignore-case t))
     (completing-read prompt storage-inventory-table nil t)))
 
 (defun storage-completing-read-location (prompt)
   "Read a location name, using PROMPT."
+  (unless storage-inventory-table
+    (storage-read-tables))
   (let ((completion-ignore-case t))
     (completing-read prompt storage-locations-table nil t)))
 
@@ -154,6 +174,47 @@ LOCATION may be a description or a number."
                             (storage-nested-location item-location)
                             ", in "))
       (message "Could not locate %s" item))))
+
+(defun set-cell (row key value)
+  "Set the value of a cell in ROW, for column KEY, to VALUE.
+The buffer-local variable `field-names' is used."
+  (aset row (position key field-names :test 'equal) value))
+
+(defun storage-add-item (item category price supplier)
+  "Add an ITEM to the inventory, in CATEGORY at PRICE from SUPPLIER."
+  (save-window-excursion
+    (save-excursion
+      (find-file storage-inventory-filename)
+      (storage-get-column-names)
+      (let* ((label-number (read-from-minibuffer "Label number: "))
+             (storage-location (storage-completing-read-location (format "Storage location for %s: " item))))
+        (goto-char (point-max))
+        (let ((cells (make-vector (length field-names) "")))
+          (set-cell cells "Label number" label-number)
+          (set-cell cells "Item" item)
+          (set-cell cells "Type" category)
+          (set-cell cells "Origin" supplier)
+          (set-cell cells "Normal location" storage-location)
+          (set-cell cells "Approx value when bought" price)
+          (insert (mapconcat 'identity cells ",")
+                  "\n"))))))
+
+(defun storage-add-part (item category price)
+  "Add an ITEM to parts storage, in CATEGORY at PRICE."
+  (save-window-excursion
+    (save-excursion
+      (find-file storage-project-parts-filename)
+      (storage-get-column-names)
+      (let* ((item-number (read-from-minibuffer "Item number: "))
+             (storage-location (storage-completing-read-location (format "Storage location for %s: " item))))
+        (goto-char (point-max))
+        (let ((cells (make-vector (length field-names) "")))
+          (set-cell cells "Item number" item-number)
+          (set-cell cells "Item" item)
+          (set-cell cells "Type" category)
+          (set-cell cells "Normal location" storage-location)
+          (insert (mapconcat 'identity cells ",")
+                  "\n"))))))
 
 (provide 'storage)
 ;;; storage.el ends here
