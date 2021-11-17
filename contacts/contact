@@ -25,7 +25,7 @@ def main():
     parser.add_argument("people", nargs='*')
     args = parser.parse_args()
 
-    contacts_file = args.contacts or os.path.expandvars("$COMMON/org/contacts.csv")
+    contacts_file = args.contacts or os.path.expandvars("$SYNCED/org/contacts.csv")
 
     by_id, by_name = contacts_data.read_contacts(contacts_file)
 

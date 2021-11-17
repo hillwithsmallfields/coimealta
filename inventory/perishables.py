@@ -5,7 +5,7 @@ import csv
 import os
 import datetime
 
-PERISHABLES_FILE = os.path.expandvars("$COMMON/org/perishables.csv")
+PERISHABLES_FILE = os.path.expandvars("$SYNCED/org/perishables.csv")
 
 def convert_row(row):
     row['Best before'] = datetime.date.fromisoformat(row['Best before'])
