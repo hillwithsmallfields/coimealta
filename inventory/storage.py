@@ -344,8 +344,8 @@ bookshelf_area = 10 * 2 * 1.5
 def calculate_capacities(locations):
     capacity_by_type = {}
     for location in locations.values():
-        loctype = location['Type'].lower()
-        locsize = location['Size'].lower()
+        loctype = (location['Type'] or "").lower() if 'Type' in location else ""
+        locsize = (location['Size'] or "").lower() if 'Size' in location else ""
         if loctype != "" and locsize != "":
             capacity_by_type[loctype] = float(capacity_by_type.get(loctype, 0)) + float(locsize)
     volume = sum_capacities(capacity_by_type, ('box', 'crate',
