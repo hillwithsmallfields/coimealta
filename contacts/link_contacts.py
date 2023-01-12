@@ -27,13 +27,16 @@ def find_siblings(person, by_id):
     more = True
     if len(sibs) > 0:
         while more:
-            for sib in list(person['Siblings']):
-                sibsibs = by_id[sib]['Siblings']
-                more = False
-                for sibsib in sibsibs:
-                    if sibsib not in sibs:
-                        sibs.add(sibsib)
-                        more = True
+            try:
+                for sib in list(person['Siblings']):
+                    sibsibs = by_id[sib]['Siblings']
+                    more = False
+                    for sibsib in sibsibs:
+                        if sibsib not in sibs:
+                            sibs.add(sibsib)
+                            more = True
+            except KeyError:
+                print("Missing key in looking for sibling", sib, "of person", person)
     yourself = person['ID']
     if yourself in sibs:
         sibs.remove(yourself)
@@ -88,15 +91,22 @@ def main():
 
 def link_contacts_main(input_file, analyze, graph, output_file):
 
+    """Update the connections between people.
+    Fills in the other direction for any that are given in only
+    one direction."""
+
     print("Reading contacts from", input_file)
     by_id, by_name = contacts_data.read_contacts(input_file)
 
     for person in by_id.values():
-        person['Parents'] = normalize_to_IDs(person['Parents'], by_name)
-        person['Offspring'] = normalize_to_IDs(person['Offspring'], by_name)
-        person['Siblings'] = normalize_to_IDs(person['Siblings'], by_name)
-        person['Partners'] = normalize_to_IDs(person['Partners'], by_name)
-        person['Knows'] = normalize_to_IDs(person['Knows'], by_name)
+        try:
+            person['Parents'] = normalize_to_IDs(person['Parents'], by_name)
+            person['Offspring'] = normalize_to_IDs(person['Offspring'], by_name)
+            person['Siblings'] = normalize_to_IDs(person['Siblings'], by_name)
+            person['Partners'] = normalize_to_IDs(person['Partners'], by_name)
+            person['Knows'] = normalize_to_IDs(person['Knows'], by_name)
+        except KeyError:
+            print("missing key while processing", person)
 
     for person_id, person in by_id.items():
         partner_ids = person['Partners']
@@ -106,14 +116,23 @@ def link_contacts_main(input_file, analyze, graph, output_file):
             if len(partners_partners) == 0: # again, for monogamists only
                 partner['Partners'].add(person_id)
         for parent_id in person['Parents']:
+            if parent_id not in by_id:
+                print(person.get('_name_', person), "has an unlisted parent", parent_id)
+                continue
             parent = by_id[parent_id]
             if person_id not in parent['Offspring']:
                 parent['Offspring'].add(person_id)
         for offspring_id in person['Offspring']:
+            if offspring_id not in by_id:
+                print(person.get('_name_', person), "has an unlisted child", offspring_id)
+                continue
             child = by_id[offspring_id]
             if person_id not in child['Parents']:
                 child['Parents'].add(person_id)
         for sibling_id in find_siblings(person, by_id):
+            if sibling_id not in by_id:
+                print(person.get('_name_', person), "has an unlisted sibling", sibling_id)
+                continue
             sibling = by_id[sibling_id]
             if person_id not in sibling['Siblings']:
                 sibling['Siblings'].add(person_id)
@@ -123,20 +142,22 @@ def link_contacts_main(input_file, analyze, graph, output_file):
 
     if graph:
         print("digraph {")
-        for id, person in by_id.items():
+        for uid, person in by_id.items():
             their_partners = person['Partners']
             their_offspring = person['Offspring']
             their_parents = person['Parents']
             if len(their_partners) > 0 or len(their_offspring) > 0 or len(their_parents) > 0:
-                print("  ", id, '[label="' + person['_name_'] + '" shape=' + ("box" if person['Gender'] == 'm' else "diamond") + "]")
-            if len(their_partners) > 0:
-                print("    ", id, "->", "{", ",".join(their_partners), "}")
-                print("    {rank=same", id, " ".join(their_partners), "}")
-            if len(their_offspring) > 0:
-                print("    ", id, "->", "{", ",".join(their_offspring), "} [style=dotted]")
+                print("  ", uid,
+                      ('[label="' + person['_name_']
+                       + '" shape=' + ("box" if person['Gender'] == 'm' else "diamond") + "]"))
+            if their_partners:
+                print("    ", uid, "->", "{", ",".join(their_partners), "}")
+                print("    {rank=same", uid, " ".join(their_partners), "}")
+            if their_offspring:
+                print("    ", uid, "->", "{", ",".join(their_offspring), "} [style=dotted]")
                 print("    {rank=same", " ".join(their_offspring), "}")
-            if len(their_parents) > 0:
-                print("    ", id, "->", "{", ",".join(their_parents), "} [style=dashed]")
+            if their_parents:
+                print("    ", uid, "->", "{", ",".join(their_parents), "} [style=dashed]")
         print("}")
 
     if analyze:

@@ -14,14 +14,17 @@ fieldnames = ['Given name', 'Middle names', 'Surname', 'Title', 'Old name', 'AKA
               'Birthday', 'Died',
               'First contact', 'Last contact', 'In touch',
               'Gender',
-              'ID', 'Parents', 'Offspring', 'Siblings', 'Partners', 'Ex-partners', 'Knows', 'Nationality',
+              'ID', 'Parents', 'Offspring', 'Siblings',
+              'Partners', 'Ex-partners', 'Knows', 'Nationality',
               'Notes',
-              'Group Membership', 'Flags', 'Other groups', 'Organizations', 'Place met',
+              'Group Membership', 'Flags', 'Other groups',
+              'Organizations', 'Universities', 'Place met',
               'Subjects', 'Jobs',
               'Primary email', 'Other emails',
               'Primary phone Type', 'Primary phone Value',
               'Secondary phone Type', 'Secondary phone Value',
-              'Street', 'Village/District', 'City', 'County', 'State', 'Postal Code', 'Country', 'Extended Address']
+              'Street', 'Village/District', 'City', 'County', 'State',
+              'Postal Code', 'Country', 'Extended Address']
 
 # Fields to split into lists
 multi_fields = ['Parents', 'Offspring', 'Siblings',
@@ -32,16 +35,22 @@ multi_fields = ['Parents', 'Offspring', 'Siblings',
                 'Other groups']
 
 def make_name(person):
+    """Assemble a name from a person's fields."""
     return ' '.join([(person.get('Given name', "") or "")]
                     + (person.get('Middle names', "") or "").split()
                     + [(person.get('Surname', "") or "")])
 
 def make_short_name(person):
+    """Make a short form of a person's name."""
     return ' '.join([(person.get('Given name', "") or "")]
                     + [(person.get('Surname', "") or "")])
 
 def string_list_with_and(items):
-    return ", ".join(items[:-1])+", and "+items[-1] if len(items) > 2 else items[0]+" and "+items[1] if len(items) == 2 else items[0]
+    return (", ".join(items[:-1])
+            + ", and "
+            + items[-1] if len(items) > 2 else items[0]
+            + " and "
+            + items[1] if len(items) == 2 else items[0])
 
 # todo: sort residents to bring oldest (or most ancestral) to the start
 def names_string(people):
@@ -51,10 +60,13 @@ def names_string(people):
         if surname not in by_surname:
             by_surname[surname] = []
         by_surname[surname].append(person.get('Given name', ""))
-    names = [string_list_with_and(sorted(by_surname[surname])) + " " + surname for surname in sorted(by_surname.keys())]
+    names = [string_list_with_and(sorted(by_surname[surname]))
+             + " "
+             + surname for surname in sorted(by_surname.keys())]
     return string_list_with_and(names)
 
 def make_address(person):
+    """Put together an address tuple."""
     return (person.get('Street', ""),
             person.get('Village/District', ""),
             person.get('City', ""),
@@ -64,17 +76,20 @@ def make_address(person):
             person.get('Country'))
 
 def make_ID():
+    """Make a letter-digit-letter-digit random ID that is not a valid hex string."""
     return (str(chr(random.randint(0, 19) + ord('G')))
             + str(chr(random.randint(0, 9) + ord('0')))
             + str(chr(random.randint(0, 25) + ord('A')))
             + str(chr(random.randint(0, 9) + ord('0'))))
 
 def age_in_year(person, year):
+    """Return how old a person is in a given year."""
     bday = person.get('Birthday', "") or ""
     match = re.match("[0-9][0-9][0-9][0-9]", bday)
     return (year - int(match.group(0))) if match else None
 
 def birthday(person, this_year):
+    """Return this year's birthday of a person, as a datetime.date."""
     bday_string = person.get('Birthday', "") or ""
     if bday_string == "":
         return False
@@ -96,6 +111,7 @@ def birthday(person, this_year):
     return bday
 
 def birthday_soon(person, this_year, today, within_days=30):
+    """Return whether a person has a birthday soon."""
     bday = birthday(person, this_year)
     if not bday:
         return False
@@ -103,6 +119,8 @@ def birthday_soon(person, this_year, today, within_days=30):
     return interval_to_birthday >= 0 and interval_to_birthday < within_days
 
 def last_contacted(person):
+    """Return when I was last in touch with a person, or None if not recorded.
+    The input is a person dictionary, and the result is a datetime.date."""
     cday_string = person.get('In touch', "")
     if not cday_string:
         return None
@@ -147,18 +165,21 @@ def by_name(people, name):
     return people.get(name)
 
 def set_field_if_empty(person, field, value):
+    """Set a field of a person dictionary only if there is no value already in that field."""
     if person and (field not in person or person[field] == ""):
         person[field] = value
         return True
     return False
 
 def set_field_if_not_empty(person, field, value):
+    """Set a field of a person dictionary only if there is already a value in that field."""
     if person and (field in person and person[field] != ""):
         person[field] = value
         return True
     return False
 
 def set_field_if_greater(person, field, value):
+    """Set a field of a person dictionary if the new value is greater than the old one."""
     if (person
         and (field not in person
              or person[field] == ""
@@ -168,27 +189,30 @@ def set_field_if_greater(person, field, value):
     return False
 
 def set_field(person, field, value):
+    """Set a field of a person dictionary.
+    None-safe."""
     if person:
         person[field] = value
         return True
     return False
 
 def read_contacts(filename):
-    by_id = {}
-    by_name = {}
+    """Read a contacts file and return a tuple of dictionaries.
+    The first one lists contacts by ID, and the second by name."""
+    people_by_id = {}
+    people_by_name = {}
     without_id = []
     with open(filename) as instream:
-        contacts_reader = csv.DictReader(instream)
-        for row in contacts_reader:
-            n = make_name(row)
-            sn = make_short_name(row)
-            row['_name_'] = n
-            by_name[n] = row
-            if sn != n:
-                by_name[sn] = row
+        for row in csv.DictReader(instream):
+            name= make_name(row)
+            short_name = make_short_name(row)
+            row['_name_'] = name
+            people_by_name[name] = row
+            if short_name != name:
+                people_by_name[short_name] = row
             uid = row.get('ID', "")
             if uid is not None and uid != "":
-                by_id[uid] = row
+                people_by_id[uid] = row
             else:
                 without_id.append(row)
             for multi in multi_fields:
@@ -198,28 +222,32 @@ def read_contacts(filename):
 
     for person in without_id:
         uid = make_ID()
-        while uid in by_id:
+        while uid in people_by_id:
             uid = make_ID()
         person['ID'] = uid
-        by_id[uid] = person
+        people_by_id[uid] = person
 
-    return by_id, by_name
+    return people_by_id, people_by_name
 
-def write_contacts(filename, by_name):
+def write_contacts(filename, people_by_name):
+    """Write a dictionary of contacts-by-name to a file."""
+    all_found_fields = set().union(*[set(row.keys()) for row in people_by_name.values()])
+    print("all_found_fields are", all_found_fields)
+    if all_found_fields != set(fieldnames):
+        print("These extra fields were found:", all_found_fields - set(fieldnames))
     with open(filename, 'w') as output:
         contacts_writer = csv.DictWriter(output, fieldnames)
         contacts_writer.writeheader()
-        for nm in sorted(by_name.keys()):
-            row = by_name[nm]
+        for name in sorted(people_by_name.keys()):
+            row = people_by_name[name]
             # print row
             for multi in multi_fields:
                 # print("converting", multi, row[multi])
                 row[multi] = ' '.join(row[multi])
                 # print("converted", multi, row[multi])
-            if '_name_' in row:
-                del row['_name_']
-            if '_groups_' in row:
-                del row['_groups_']
+            for deledend in ('', '_name_', '_groups_'):
+                if deledend in row:
+                    del row[deledend]
             try:
                 contacts_writer.writerow(row)
             except ValueError:
