@@ -12,14 +12,15 @@ def count_grouped_titles(title_map, titles):
 
 fieldnames = ['Given name', 'Middle names', 'Surname', 'Title', 'Old name', 'AKA',
               'Birthday', 'Died',
-              'First contact', 'Last contact', 'In touch',
+              'First contact', 'In touch',
               'Gender',
               'ID', 'Parents', 'Offspring', 'Siblings',
-              'Partners', 'Ex-partners', 'Knows', 'Nationality',
+              'Partners', 'Ex-partners', 'Knows',
               'Notes',
-              'Group Membership', 'Flags', 'Other groups',
-              'Organizations', 'Universities', 'Place met',
-              'Subjects', 'Jobs',
+              'Flags',
+              'Nationality', 'Place met',
+              'Group Membership', 'Other groups', 'Organizations',
+              'Universities', 'Subjects', 'Jobs',
               'Primary email', 'Other emails',
               'Primary phone Type', 'Primary phone Value',
               'Secondary phone Type', 'Secondary phone Value',
@@ -37,7 +38,7 @@ multi_fields = ['Parents', 'Offspring', 'Siblings',
 def make_name(person):
     """Assemble a name from a person's fields."""
     return ' '.join([(person.get('Given name', "") or "")]
-                    + (person.get('Middle names', "") or "").split()
+                    + (person.get('Middle names', "") or "").split(' ')
                     + [(person.get('Surname', "") or "")])
 
 def make_short_name(person):
@@ -216,7 +217,12 @@ def read_contacts(filename):
             else:
                 without_id.append(row)
             for multi in multi_fields:
-                row[multi] = set((row.get(multi, "") or "").split())
+                row[multi] = set(
+                    item.strip()
+                    for item in
+                    (row.get(multi, "") or "").split(';')
+                    if item
+                )
             row['_groups_'] = row['Group Membership'].union(row['Organizations'],
                                                             row['Other groups'])
 
@@ -243,7 +249,7 @@ def write_contacts(filename, people_by_name):
             # print row
             for multi in multi_fields:
                 # print("converting", multi, row[multi])
-                row[multi] = ' '.join(row[multi])
+                row[multi] = '; '.join(sorted(list(row[multi])))
                 # print("converted", multi, row[multi])
             for deledend in ('', '_name_', '_groups_'):
                 if deledend in row:

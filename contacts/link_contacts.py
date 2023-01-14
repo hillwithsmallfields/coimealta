@@ -16,10 +16,16 @@ def partners(person):
 def siblings(person):
     return person['Siblings']
 
+def name_to_ID(name, by_name):
+    name = name.replace('_', ' ')
+    if name not in by_name:
+        print("not found:", name)
+    return by_name[name]['ID'] if name in by_name else "Z0Z0"
+
 def normalize_to_IDs(people, by_name):
     return set([(person
                  if re.match("[G-Z][0-9][A-Z][0-9]", person)
-                 else by_name[person.replace('_', ' ')]['ID'])
+                 else name_to_ID(person, by_name))
                 for person in people])
 
 def find_siblings(person, by_id):
@@ -79,16 +85,6 @@ def analyze_contacts(by_id):
     doctored = contacts_data.count_grouped_titles(by_title, ["Dr", "Revd Dr", "Prof", "Revd Prof"])
     return n_people, by_gender, by_nationality, by_place_met, by_title, ordained, doctored
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--analyze", action='store_true')
-    parser.add_argument("--graph", action='store_true')
-    parser.add_argument("input")
-    parser.add_argument("output")
-    args = parser.parse_args()
-
-    link_contacts_main(args.input, args.analyze, args.graph, args.output)
-
 def link_contacts_main(input_file, analyze, graph, output_file):
 
     """Update the connections between people.
@@ -99,12 +95,12 @@ def link_contacts_main(input_file, analyze, graph, output_file):
     by_id, by_name = contacts_data.read_contacts(input_file)
 
     for person in by_id.values():
+        print(name(person))
         try:
-            person['Parents'] = normalize_to_IDs(person['Parents'], by_name)
-            person['Offspring'] = normalize_to_IDs(person['Offspring'], by_name)
-            person['Siblings'] = normalize_to_IDs(person['Siblings'], by_name)
-            person['Partners'] = normalize_to_IDs(person['Partners'], by_name)
-            person['Knows'] = normalize_to_IDs(person['Knows'], by_name)
+            for field in ('Parents', 'Offspring', 'Siblings', 'Partners', 'Knows'):
+                if person[field]:
+                    print("  ", field, person[field])
+                    person[field] = normalize_to_IDs(person[field], by_name)
         except KeyError:
             print("missing key while processing", person)
 
@@ -181,5 +177,13 @@ def link_contacts_main(input_file, analyze, graph, output_file):
     else:
         return None
 
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--analyze", action='store_true')
+    parser.add_argument("--graph", action='store_true')
+    parser.add_argument("input_file")
+    parser.add_argument("output_file")
+    return vars(parser.parse_args())
+
 if __name__ == "__main__":
-    main()
+    link_contacts_main(**get_args())
