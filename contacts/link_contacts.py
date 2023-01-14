@@ -91,15 +91,12 @@ def link_contacts_main(input_file, analyze, graph, output_file):
     Fills in the other direction for any that are given in only
     one direction."""
 
-    print("Reading contacts from", input_file)
     by_id, by_name = contacts_data.read_contacts(input_file)
 
     for person in by_id.values():
-        print(name(person))
         try:
             for field in ('Parents', 'Offspring', 'Siblings', 'Partners', 'Knows'):
                 if person[field]:
-                    print("  ", field, person[field])
                     person[field] = normalize_to_IDs(person[field], by_name)
         except KeyError:
             print("missing key while processing", person)

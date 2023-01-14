@@ -14,7 +14,7 @@ multi_fields = ['Parents', 'Offspring', 'Siblings',
 
 def make_name(person):
     return ' '.join([person.get('Given name', "")]
-                    + person.get('Middle names', "").split()
+                    + person.get('Middle names', "").split(" ")
                     + [person.get('Surname', "")])
 
 def make_name_list(people):
@@ -63,7 +63,7 @@ def main():
         contacts_reader = csv.DictReader(input)
         for row in contacts_reader:
             for multi in multi_fields:
-                row[multi] = (row.get(multi, "") or "").split()
+                row[multi] = (row.get(multi, "") or "").split(";")
             n = make_name(row)
             row['_name_'] = n
             by_name[n] = row

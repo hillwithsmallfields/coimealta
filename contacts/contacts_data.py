@@ -37,9 +37,14 @@ multi_fields = ['Parents', 'Offspring', 'Siblings',
 
 def make_name(person):
     """Assemble a name from a person's fields."""
-    return ' '.join([(person.get('Given name', "") or "")]
-                    + (person.get('Middle names', "") or "").split(' ')
-                    + [(person.get('Surname', "") or "")])
+    first_name = (person.get('Given name', "") or "")
+    middle_names = [name
+                    for name in (person.get('Middle names', "") or "").split(' ')
+                    if name]
+    surname = (person.get('Surname', "") or "")
+    return (first_name + " " + " ".join(middle_names) + " " + surname
+            if middle_names
+            else first_name + " " + surname)
 
 def make_short_name(person):
     """Make a short form of a person's name."""
@@ -205,12 +210,12 @@ def read_contacts(filename):
     without_id = []
     with open(filename) as instream:
         for row in csv.DictReader(instream):
-            name= make_name(row)
+            name = make_name(row)
             short_name = make_short_name(row)
             row['_name_'] = name
             people_by_name[name] = row
-            if short_name != name:
-                people_by_name[short_name] = row
+            # if short_name != name:
+            #     people_by_name[short_name] = row
             uid = row.get('ID', "")
             if uid is not None and uid != "":
                 people_by_id[uid] = row
