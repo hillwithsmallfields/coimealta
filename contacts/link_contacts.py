@@ -43,6 +43,7 @@ def find_siblings(person, by_id):
                             more = True
             except KeyError:
                 print("Missing key in looking for sibling", sib, "of person", person)
+                break
     yourself = person['ID']
     if yourself in sibs:
         sibs.remove(yourself)
