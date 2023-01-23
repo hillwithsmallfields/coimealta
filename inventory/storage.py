@@ -444,7 +444,7 @@ def storage_server_function(in_string, files_data):
     else:
         return "Command was empty"
 
-def main():
+def get_args():
     parser = argparse.ArgumentParser()
     # parser.add_argument("--config", "-c",
     #                     default="/usr/local/share/storage.yaml",
@@ -473,14 +473,23 @@ def main():
     parser.add_argument("things",
                         nargs='*',
                         help="""The things to look for.""")
-    args = parser.parse_args()
-    # with open(os.path.expanduser(os.path.expandvars(args.config))) as config_file:
+    return vars(parser.parse_args())
+
+def storage(locations,
+            books,
+            inventory,
+            stock,
+            project_parts,
+            server: bool,
+            cli: bool,
+            things):
+    # with open(os.path.expanduser(os.path.expandvars(config))) as config_file:
     #     config = yaml.load(config_file)
     #     print("config is", config)
-    for defkey, defval in args.__dict__.items():
+    for defkey, defval in __dict__.items():
         if isinstance(defval, str):
-            args.__dict__[defkey] = os.path.expandvars(defval)
-    if args.server:
+            __dict__[defkey] = os.path.expandvars(defval)
+    if server:
         query_passphrase = decouple.config('query_passphrase')
         reply_passphrase = decouple.config('reply_passphrase')
         client_server.check_private_key_privacy(args)
@@ -488,40 +497,40 @@ def main():
                                                                   query_passphrase,
                                                                   reply_passphrase)
         global filenames
-        filenames = {'inventory': os.path.basename(args.inventory),
-                     'books': os.path.basename(args.books),
-                     'stock': os.path.basename(args.stock),
-                     'project_parts': os.path.basename(args.project_parts),
-                     'locations': os.path.basename(args.locations)}
-        client_server.run_servers(args.host, int(args.port),
+        filenames = {'inventory': os.path.basename(inventory),
+                     'books': os.path.basename(books),
+                     'stock': os.path.basename(stock),
+                     'project_parts': os.path.basename(project_parts),
+                     'locations': os.path.basename(locations)}
+        client_server.run_servers(host, int(port),
                                   getter=storage_server_function,
-                                  files={args.inventory: ('Label number',
+                                  files={inventory: ('Label number',
                                                           normalize_item_entry),
-                                         args.books: ('Number',
+                                         books: ('Number',
                                                       normalize_book_entry),
-                                         args.stock: ('Label number',
+                                         stock: ('Label number',
                                                       normalize_item_entry),
-                                         args.project_parts: ('Label number',
+                                         project_parts: ('Label number',
                                                               normalize_item_entry),
-                                         args.locations: ('Number',
+                                         locations: ('Number',
                                                           normalize_location)},
                                   query_key=query_key,
                                   reply_key=reply_key)
     else:
-        locations = read_locations(args.locations)
-        items = read_inventory(args.inventory)
-        items.update(read_inventory(args.stock))
-        items.update(read_inventory(args.project_parts))
-        books = read_books(args.books)
-        if args.cli:
+        locations = read_locations(locations)
+        items = read_inventory(inventory)
+        items.update(read_inventory(stock))
+        items.update(read_inventory(project_parts))
+        books = read_books(books)
+        if cli:
             StorageShell(sys.stdout, locations, items, books).cmdloop()
         else:
-            if args.things[0] in commands:
-                run_command(sys.stdout, args.things[0], args.things[1:],
+            if things[0] in commands:
+                run_command(sys.stdout, things[0], things[1:],
                             locations, items, books)
             else:
-                run_command(sys.stdout, "where", args.things,
+                run_command(sys.stdout, "where", things,
                             locations, items, books)
 
 if __name__ == "__main__":
-    main()
+    storage(**get_args())
