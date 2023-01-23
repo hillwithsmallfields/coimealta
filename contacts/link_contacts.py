@@ -3,6 +3,7 @@
 import argparse
 import re
 import contacts_data
+from collections import defaultdict
 
 def offspring(person):
     return person['Offspring']
@@ -53,10 +54,7 @@ def name(person):
     return person['_name_']
 
 def accumulate(person, aspect, by_aspect):
-    aspect = person[aspect]
-    if aspect not in by_aspect:
-        by_aspect[aspect] = []
-    by_aspect[aspect].append(person['ID'])
+    by_aspect[person[aspect]].append(person['ID'])
 
 def print_summary(by_aspect, label):
     by_frequency = {}
@@ -72,19 +70,22 @@ def print_summary(by_aspect, label):
           for freq in reversed(sorted(by_frequency.keys()))]))
 
 def analyze_contacts(by_id):
-    by_nationality = {}
-    by_gender = {}
-    by_title = {}
-    by_place_met = {}
+    by_nationality = defaultdict(list)
+    by_gender = defaultdict(list)
+    by_title = defaultdict(list)
+    by_place_met = defaultdict(list)
+    flagged = defaultdict(list)
     for id, person in by_id.items():
         accumulate(person, 'Nationality', by_nationality)
         accumulate(person, 'Gender', by_gender)
         accumulate(person, 'Title', by_title)
         accumulate(person, 'Place met', by_place_met)
+        for flag in person['Flags']:
+            flagged[flag].append(person['ID'])
     n_people = len(by_id)
     ordained = contacts_data.count_grouped_titles(by_title, ["Revd", "Revd Dr", "Revd Prof", "RtRevd"])
     doctored = contacts_data.count_grouped_titles(by_title, ["Dr", "Revd Dr", "Prof", "Revd Prof"])
-    return n_people, by_gender, by_nationality, by_place_met, by_title, ordained, doctored
+    return n_people, by_gender, by_nationality, by_place_met, by_title, ordained, doctored, flagged
 
 def link_contacts_main(input_file, analyze, graph, output_file):
 
@@ -155,7 +156,7 @@ def link_contacts_main(input_file, analyze, graph, output_file):
         print("}")
 
     if analyze:
-        n_people, by_gender, by_nationality, by_place_met, by_title, ordained, doctored = analyze_contacts(by_id)
+        n_people, by_gender, by_nationality, by_place_met, by_title, ordained, doctored, flagged = analyze_contacts(by_id)
         print(n_people, "people")
         print_summary(by_nationality, "nationalities:")
         print_summary(by_gender, "genders:")
@@ -170,7 +171,8 @@ def link_contacts_main(input_file, analyze, graph, output_file):
             "by_place_met": by_place_met,
             "by_title": by_title,
             "ordained": ordained,
-            "doctored": doctored
+            "doctored": doctored,
+            "flagged": flagged
         }
     else:
         return None
