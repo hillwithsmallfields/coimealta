@@ -82,18 +82,21 @@ def analyze_contacts(by_id):
         accumulate(person, 'Place met', by_place_met)
         for flag in person['Flags']:
             flagged[flag].append(person['ID'])
-    n_people = len(by_id)
-    ordained = contacts_data.count_grouped_titles(by_title, ["Revd", "Revd Dr", "Revd Prof", "RtRevd"])
-    doctored = contacts_data.count_grouped_titles(by_title, ["Dr", "Revd Dr", "Prof", "Revd Prof"])
-    return n_people, by_gender, by_nationality, by_place_met, by_title, ordained, doctored, flagged
+    return {
+        "n_people": len(by_id),
+        "by_gender": by_gender,
+        "by_nationality": by_nationality,
+        "by_place_met": by_place_met,
+        "by_title": by_title,
+        "ordained": contacts_data.count_grouped_titles(by_title, ["Revd", "Revd Dr", "Revd Prof", "RtRevd"]),
+        "doctored": contacts_data.count_grouped_titles(by_title, ["Dr", "Revd Dr", "Prof", "Revd Prof"]),
+        "flagged": flagged
+    }
 
-def link_contacts_main(input_file, analyze, graph, output_file):
-
-    """Update the connections between people.
+def link_contacts(by_id, by_name):
+    """Update the connections between people, in memory.
     Fills in the other direction for any that are given in only
     one direction."""
-
-    by_id, by_name = contacts_data.read_contacts(input_file)
 
     for person in by_id.values():
         try:
@@ -133,6 +136,18 @@ def link_contacts_main(input_file, analyze, graph, output_file):
                 sibling['Siblings'].add(person_id)
         # todo: mutualize contacts
 
+    return by_name
+
+def link_contacts_main(input_file, analyze, graph, output_file):
+
+    """Update the connections between people, in the contacts file.
+    Fills in the other direction for any that are given in only
+    one direction."""
+
+    by_id, by_name = contacts_data.read_contacts(input_file)
+
+    link_contacts(by_id, by_name)
+
     contacts_data.write_contacts(output_file, by_name)
 
     if graph:
@@ -156,24 +171,16 @@ def link_contacts_main(input_file, analyze, graph, output_file):
         print("}")
 
     if analyze:
-        n_people, by_gender, by_nationality, by_place_met, by_title, ordained, doctored, flagged = analyze_contacts(by_id)
+        n_people, by_gender, by_nationality, by_place_met, by_title, ordained, doctored, flagged
+        analysis = analyze_contacts(by_id)
         print(n_people, "people")
-        print_summary(by_nationality, "nationalities:")
-        print_summary(by_gender, "genders:")
-        print_summary(by_title, "titles:")
-        print_summary(by_place_met, "places met:")
+        print_summary(analysis['by_nationality'], "nationalities:")
+        print_summary(analysis['by_gender'], "genders:")
+        print_summary(analysis['by_title'], "titles:")
+        print_summary(analysis['by_place_met'], "places met:")
         print("%d ordained (%d%% of the people you know)" % (ordained, ordained*100 / n_people))
         print("%d with doctorates (%d%% of the people you know)" % (doctored, doctored * 100 / n_people))
-        return {
-            "n_people": n_people,
-            "by_gender": by_gender,
-            "by_nationality": by_nationality,
-            "by_place_met": by_place_met,
-            "by_title": by_title,
-            "ordained": ordained,
-            "doctored": doctored,
-            "flagged": flagged
-        }
+        return analysis
     else:
         return None
 
