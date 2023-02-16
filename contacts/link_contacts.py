@@ -80,7 +80,7 @@ def analyze_contacts(by_id):
         accumulate(person, 'Gender', by_gender)
         accumulate(person, 'Title', by_title)
         accumulate(person, 'Place met', by_place_met)
-        for flag in person['Flags']:
+        for flag in person.get('Flags', "") or "":
             flagged[flag].append(person['ID'])
     return {
         "n_people": len(by_id),
@@ -101,7 +101,7 @@ def link_contacts(by_id, by_name):
     for person in by_id.values():
         try:
             for field in ('Parents', 'Offspring', 'Siblings', 'Partners', 'Knows'):
-                if person[field]:
+                if person.get(field):
                     person[field] = normalize_to_IDs(person[field], by_name)
         except KeyError:
             print("missing key while processing", person)
