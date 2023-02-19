@@ -450,26 +450,26 @@ def get_args():
     #                     default="/usr/local/share/storage.yaml",
     #                     help="""The config file for the storage system.""")
     parser.add_argument("--locations", "-f",
-                        default="$ORG/storage.csv",
+                        default=os.path.expandvars("$ORG/storage.csv"),
                         help="""The CSV file containing the storage locations.""")
     parser.add_argument("--books", "-b",
-                        default="$ORG/books.csv",
+                        default=os.path.expandvars("$ORG/books.csv"),
                         help="""The CSV file containing the book catalogue.""")
     parser.add_argument("--inventory", "-i",
-                        default="$ORG/inventory.csv",
+                        default=os.path.expandvars("$ORG/inventory.csv"),
                         help="""The CSV file containing the general inventory.""")
     parser.add_argument("--stock", "-s",
-                        default="$ORG/stock.csv",
+                        default=os.path.expandvars("$ORG/stock.csv"),
                         help="""The CSV file containing the stock material inventory.""")
     parser.add_argument("--project-parts", "-p",
-                        default="$ORG/project-parts.csv",
+                        default=os.path.expandvars("$ORG/project-parts.csv"),
                         help="""The CSV file containing the project parts inventory.""")
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument("--server", action='store_true',
                         help="""Run a little CLI on a network socket.""")
     actions.add_argument("--cli", action='store_true',
                          help="""Run a little CLI on stdin and stdout.""")
-    client_server.client_server_add_arguments(parser, 9797)
+    client_server.client_server_add_arguments(parser, 9797, include_keys=False)
     parser.add_argument("things",
                         nargs='*',
                         help="""The things to look for.""")
@@ -482,13 +482,16 @@ def storage(locations,
             project_parts,
             server: bool,
             cli: bool,
+            host: str,
+            port,
+            tcp: bool,
             things):
     # with open(os.path.expanduser(os.path.expandvars(config))) as config_file:
     #     config = yaml.load(config_file)
     #     print("config is", config)
-    for defkey, defval in __dict__.items():
-        if isinstance(defval, str):
-            __dict__[defkey] = os.path.expandvars(defval)
+    # for defkey, defval in __dict__.items():
+    #     if isinstance(defval, str):
+    #         __dict__[defkey] = os.path.expandvars(defval)
     if server:
         query_passphrase = decouple.config('query_passphrase')
         reply_passphrase = decouple.config('reply_passphrase')
