@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import cmd
+import collections
 import csv
 import decouple
 import functools
@@ -37,15 +38,12 @@ class StorageShell(cmd.Cmd):
 
     def do_list_books(self, *_args):
         """Show a table of where all the books are."""
-        by_location = {}
+        by_location = collections.defaultdict(list)
         for idx, book in self.books.items():
             if 'Location' in book:
-                loc = book['Location']
-                if loc in by_location:
-                    by_location[loc].append(idx)
-                else:
-                    by_location[loc] = [idx]
-        for loc, contents in by_location.items():
+                by_location[book['Location']].append(idx)
+        for loc in sorted(by_location.keys()):
+            contents = by_location[loc]
             self.outstream.write(describe_nested_location(self.locations, loc) + ":\n")
             for title in sorted([self.books[idx]['Title'] for idx in contents ]):
                 self.outstream.write("    " + title + "\n")
@@ -104,15 +102,12 @@ class StorageShell(cmd.Cmd):
     def do_list_items(self, *args):
         """Show a table of where all the items are."""
         # todo: option to print table of where all inventory items are
-        by_location = {}
+        by_location = defaultdict(list)
         for idx, item in self.items.items():
             if 'Normal location' in item:
-                loc = item['Normal location']
-                if loc in by_location:
-                    by_location[loc].append(idx)
-                else:
-                    by_location[loc] = [idx]
-        for loc, contents in by_location.items():
+                by_location[item['Normal location']].append(idx)
+        for loc in sorted(by_location.keys()):
+            contents = by_location[loc]
             self.outstream.write(describe_nested_location(self.locations, loc) + ":\n")
             for title in sorted([self.items[idx]['Item'] for idx in contents ]):
                 self.outstream.write("    " + title + "\n")
@@ -150,7 +145,7 @@ class StorageShell(cmd.Cmd):
 
     def do_list_locations(self, *things):
         """List everything that is in the matching locations."""
-        for where in locations_matching_patterns(self.locations, things):
+        for where in sorted(locations_matching_patterns(self.locations, things)):
             list_location(self.outstream, where, "", self.locations, self.items, self.books)
         return False
 
@@ -225,7 +220,7 @@ def normalize_item_entry(row):
 
 def read_inventory(inventory_file, _key=None):
     if os.path.exists(inventory_file):
-        with io.open(inventory_file, 'r', encoding='utf-8') as instream:
+        with open(inventory_file, 'r', encoding='utf-8') as instream:
             return { item['Label number']: item
                      for item in map(normalize_item_entry,
                                      [row
@@ -247,6 +242,10 @@ def items_matching(inventory_index, pattern):
              for item in inventory_index.values()
              if item_matches(item, pattern) ]
 
+def store_item(inventory_index, item, location):
+    """Record that an item is in a location."""
+    item['Normal location'] = location
+
 def normalize_location(row):
     contained_within = row['ContainedWithin']
     try:
@@ -262,7 +261,7 @@ def normalize_location(row):
     return row
 
 def read_locations(locations_file, _key=None):
-    with io.open(locations_file, 'r', encoding='utf-8') as instream:
+    with open(locations_file, 'r', encoding='utf-8') as instream:
         return { location['Number']: location
                  for location in [normalize_location(row)
                                    for row in csv.DictReader(instream)
