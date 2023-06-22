@@ -15,12 +15,39 @@ import shlex
 import sys
 # import yaml
 
+STORAGE_BASE=500000
+
 source_dir = os.path.dirname(os.path.realpath(__file__))
 # This corresponds to https://github.com/hillwithsmallfields
 my_projects = os.path.dirname(os.path.dirname(source_dir))
 sys.path.append(os.path.join(my_projects, "Simple_client_server"))
 
 import client_server # the shell script ../storage makes this available
+
+class Storer:
+
+    def __init__(self, locations, items, books, initial_type="books"):
+        self.locations = locations
+        self.items = items
+        self.books = books
+        self.current_type = initial_type
+        self.current_location = None
+
+    def store(self, token):
+        if token in ('books', 'items'):
+            self.current_type = token
+        elif token == 'quit':
+            return False
+        else:
+            token = int(token)
+            if token >= STORAGE_BASE:
+                self.current_location = token
+            else:
+                if self.current_type == 'book':
+                    store_book(self.books, token, self.current_location)
+                else:
+                    store_item(self.items, token, self.current_location)
+            return True
 
 class StorageShell(cmd.Cmd):
 
@@ -101,7 +128,7 @@ class StorageShell(cmd.Cmd):
 
     def do_list_items(self, *args):
         """Show a table of where all the items are."""
-        # todo: option to print table of where all inventory items are
+        # TODO: option to print table of where all inventory items are
         by_location = defaultdict(list)
         for idx, item in self.items.items():
             if 'Normal location' in item:
@@ -167,6 +194,20 @@ class StorageShell(cmd.Cmd):
             self.outstream.write(finding + " is " + findings[finding] + "\n")
         return False
 
+    def do_store(self, thing_type="books", *args):
+        """Put things into locations."""
+        storer = Storer(self.locations, self.items, self.books, initial_type=thing_type)
+        if args:
+            for arg in args:
+                storer.store(arg)
+        else:
+            done = False
+            while not done:
+                for token in sys.stdin.readline().split():
+                    if not storer.store(token):
+                        done = True
+                        break
+
 def normalize_book_entry(row):
     ex_libris = row['Number']
     if isinstance(ex_libris, str) and ex_libris != "":
@@ -221,10 +262,10 @@ def normalize_item_entry(row):
 def read_inventory(inventory_file, _key=None):
     if os.path.exists(inventory_file):
         with open(inventory_file, 'r', encoding='utf-8') as instream:
-            return { item['Label number']: item
-                     for item in map(normalize_item_entry,
-                                     [row
-                                       for row in csv.DictReader(instream) ])}
+            return {item['Label number']: item
+                    for item in map(normalize_item_entry,
+                                    [row
+                                     for row in csv.DictReader(instream)])}
     else:
         return {}
 
@@ -244,7 +285,11 @@ def items_matching(inventory_index, pattern):
 
 def store_item(inventory_index, item, location):
     """Record that an item is in a location."""
-    item['Normal location'] = location
+    inventory_index[item]['Normal location'] = location
+
+def store_book(inventory_index, book, location):
+    """Record that a book is in a location."""
+    inventory_index[book]['Location'] = location
 
 def normalize_location(row):
     contained_within = row['ContainedWithin']
@@ -384,23 +429,6 @@ def list_location(outstream, location, prefix, locations, items, books):
             outstream.write(next_prefix + subloc['Description'] + "\n")
             list_location(outstream, subloc, next_prefix, locations, items, books)
 
-def cmd_bad(outstream, _args, _locations, _items, _books):
-    """Report an invalid command."""
-    outstream.write("""Bad command; enter "help" to get a list of commands\n""")
-    return True
-
-def run_command(outstream,
-                command,
-                things,
-                locations,
-                items, books):
-    # todo: change the arguments to these functions, to take a dictionary mapping standard names to the used names, and one mapping the used names to the data
-    return commands.get(command, cmd_bad)(outstream,
-                                          things,
-                                          locations,
-                                          items,
-                                          books)
-
 filenames = {}
 
 remembered_items_data = {'combined': None,
@@ -433,12 +461,6 @@ def storage_server_function(in_string, files_data):
                      files_data[filenames['locations']],
                      items_data,
                      files_data[filenames['books']]).onecmd(in_string)
-        run_command(output_catcher,
-                    command_parts[0],
-                    command_parts[1:],
-                    files_data[filenames['locations']],
-                    items_data,
-                    files_data[filenames['books']])
         return output_catcher.getvalue()
     else:
         return "Command was empty"
@@ -524,15 +546,14 @@ def storage(locations,
         items.update(read_inventory(stock))
         items.update(read_inventory(project_parts))
         books = read_books(books)
+        command_handler = StorageShell(sys.stdout, locations, items, books)
         if cli:
-            StorageShell(sys.stdout, locations, items, books).cmdloop()
+            command_handler.cmdloop()
         else:
-            if things[0] in commands:
-                run_command(sys.stdout, things[0], things[1:],
-                            locations, items, books)
+            if things[0] in command_handler.completenames(""):
+                command_handler.onecmd(" ".join(things))
             else:
-                run_command(sys.stdout, "where", things,
-                            locations, items, books)
+                command_handler.onecmd("find_things " + " ".join(things))
 
 if __name__ == "__main__":
     storage(**get_args())
