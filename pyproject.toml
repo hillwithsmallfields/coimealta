@@ -9,7 +9,7 @@ description = "Contacts and inventory tracker"
 readme = "README.md"
 license = {file = "LICENSE"}
 classifiers = ["License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"]
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
   "python-decouple"
 ]
