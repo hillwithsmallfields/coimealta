@@ -17,7 +17,11 @@ import sys
 
 STORAGE_BASE=500000
 
-import simple_client_server.client_server as client_server
+HAS_CLIENT_SERVER = True
+try:
+    import simple_client_server.client_server as client_server
+except:
+    HAS_CLIENT_SERVER = False
 
 class Storer:
 
@@ -485,7 +489,8 @@ def get_args():
                         help="""Run a little CLI on a network socket.""")
     actions.add_argument("--cli", action='store_true',
                          help="""Run a little CLI on stdin and stdout.""")
-    client_server.client_server_add_arguments(parser, 9797, include_keys=False)
+    if HAS_CLIENT_SERVER:
+        client_server.client_server_add_arguments(parser, 9797, include_keys=False)
     parser.add_argument("things",
                         nargs='*',
                         help="""The things to look for.""")
@@ -509,32 +514,33 @@ def storage(locations,
     #     if isinstance(defval, str):
     #         __dict__[defkey] = os.path.expandvars(defval)
     if server:
-        query_passphrase = decouple.config('query_passphrase')
-        reply_passphrase = decouple.config('reply_passphrase')
-        client_server.check_private_key_privacy(args)
-        query_key, reply_key = client_server.read_keys_from_files(args,
-                                                                  query_passphrase,
-                                                                  reply_passphrase)
         global filenames
         filenames = {'inventory': os.path.basename(inventory),
                      'books': os.path.basename(books),
                      'stock': os.path.basename(stock),
                      'project_parts': os.path.basename(project_parts),
                      'locations': os.path.basename(locations)}
-        client_server.run_servers(host, int(port),
-                                  getter=storage_server_function,
-                                  files={inventory: ('Label number',
-                                                          normalize_item_entry),
-                                         books: ('Number',
-                                                      normalize_book_entry),
-                                         stock: ('Label number',
-                                                      normalize_item_entry),
-                                         project_parts: ('Label number',
+        if HAS_CLIENT_SERVER:
+            query_passphrase = decouple.config('query_passphrase')
+            reply_passphrase = decouple.config('reply_passphrase')
+            client_server.check_private_key_privacy(args)
+            query_key, reply_key = client_server.read_keys_from_files(args,
+                                                                      query_passphrase,
+                                                                      reply_passphrase)
+            client_server.run_servers(host, int(port),
+                                      getter=storage_server_function,
+                                      files={inventory: ('Label number',
                                                               normalize_item_entry),
-                                         locations: ('Number',
-                                                          normalize_location)},
-                                  query_key=query_key,
-                                  reply_key=reply_key)
+                                             books: ('Number',
+                                                          normalize_book_entry),
+                                             stock: ('Label number',
+                                                          normalize_item_entry),
+                                             project_parts: ('Label number',
+                                                                  normalize_item_entry),
+                                             locations: ('Number',
+                                                              normalize_location)},
+                                      query_key=query_key,
+                                      reply_key=reply_key)
     else:
         locations = read_locations(locations)
         items = read_inventory(inventory)
