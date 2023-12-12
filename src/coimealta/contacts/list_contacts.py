@@ -5,7 +5,7 @@ import re
 import json
 import sys
 
-import contacts_data
+import coimealta.contacts.contacts_data
 
 def safesearch(flags, text):
     print("Searching", text)

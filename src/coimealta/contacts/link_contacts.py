@@ -2,7 +2,7 @@
 
 import argparse
 import re
-import contacts_data
+import coimealta.contacts.contacts_data
 from collections import defaultdict
 
 def offspring(person):
