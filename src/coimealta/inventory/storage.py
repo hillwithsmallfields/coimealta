@@ -17,12 +17,7 @@ import sys
 
 STORAGE_BASE=500000
 
-source_dir = os.path.dirname(os.path.realpath(__file__))
-# This corresponds to https://github.com/hillwithsmallfields
-my_projects = os.path.dirname(os.path.dirname(source_dir))
-sys.path.append(os.path.join(my_projects, "Simple_client_server"))
-
-import client_server # the shell script ../storage makes this available
+import simple_client_server.client_server as client_server
 
 class Storer:
 
