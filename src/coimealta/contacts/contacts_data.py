@@ -2,6 +2,7 @@ import csv
 import datetime
 import functools
 import operator
+import os
 import random
 import re
 
@@ -208,7 +209,7 @@ def read_contacts(filename):
     people_by_id = {}
     people_by_name = {}
     without_id = []
-    with open(filename) as instream:
+    with open(os.path.expandvars(filename)) as instream:
         for row in csv.DictReader(instream):
             name = make_name(row)
             short_name = make_short_name(row)
@@ -246,7 +247,7 @@ def write_contacts(filename, people_by_name):
     print("all_found_fields are", all_found_fields)
     if all_found_fields != set(fieldnames):
         print("These extra fields were found:", all_found_fields - set(fieldnames))
-    with open(filename, 'w') as output:
+    with open(os.path.expandvars(filename), 'w') as output:
         contacts_writer = csv.DictWriter(output, fieldnames)
         contacts_writer.writeheader()
         for name in sorted(people_by_name.keys()):
