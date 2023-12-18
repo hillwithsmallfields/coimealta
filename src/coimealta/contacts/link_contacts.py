@@ -175,14 +175,16 @@ def link_contacts_main(input_file, analyze, graph, output_file):
         print("}")
 
     if analyze:
-        n_people, by_gender, by_nationality, by_place_met, by_title, ordained, doctored, flagged
         analysis = analyze_contacts(by_id)
+        n_people = analysis['n_people']
         print(n_people, "people")
         print_summary(analysis['by_nationality'], "nationalities:")
         print_summary(analysis['by_gender'], "genders:")
         print_summary(analysis['by_title'], "titles:")
         print_summary(analysis['by_place_met'], "places met:")
+        ordained = analysis['ordained']
         print("%d ordained (%d%% of the people you know)" % (ordained, ordained*100 / n_people))
+        doctored = analysis['doctored']
         print("%d with doctorates (%d%% of the people you know)" % (doctored, doctored * 100 / n_people))
         return analysis
     else:
