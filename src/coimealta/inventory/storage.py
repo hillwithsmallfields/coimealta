@@ -258,8 +258,9 @@ def normalize_item_entry(row):
     return row
 
 def read_inventory(inventory_file, _key=None):
-    if os.path.exists(inventory_file):
-        with open(os.path.expandvars(inventory_file)) as instream:
+    filename = os.path.expandvars(inventory_file)
+    if os.path.exists(filename):
+        with open(filename) as instream:
             return {item['Label number']: item
                     for item in map(normalize_item_entry,
                                     [row
