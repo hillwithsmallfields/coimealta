@@ -244,7 +244,6 @@ def read_contacts(filename):
 def write_contacts(filename, people_by_name):
     """Write a dictionary of contacts-by-name to a file."""
     all_found_fields = set().union(*[set(row.keys()) for row in people_by_name.values()])
-    print("all_found_fields are", all_found_fields)
     if all_found_fields != set(fieldnames):
         print("These extra fields were found:", all_found_fields - set(fieldnames))
     with open(os.path.expandvars(filename), 'w') as output:

@@ -5,7 +5,6 @@ import collections
 import csv
 import decouple
 import functools
-import io
 import json
 import math
 import operator
@@ -219,7 +218,7 @@ def normalize_book_entry(row):
     return row
 
 def read_books(books_file, _key=None):
-    with io.open(books_file, 'r', encoding='utf-8') as instream:
+    with open(os.path.expandvars(books_file)) as instream:
         return { book['Number']: book
                  for book in [normalize_book_entry(row)
                               for row in csv.DictReader(instream)]
@@ -260,7 +259,7 @@ def normalize_item_entry(row):
 
 def read_inventory(inventory_file, _key=None):
     if os.path.exists(inventory_file):
-        with open(inventory_file, 'r', encoding='utf-8') as instream:
+        with open(os.path.expandvars(inventory_file)) as instream:
             return {item['Label number']: item
                     for item in map(normalize_item_entry,
                                     [row
@@ -305,7 +304,7 @@ def normalize_location(row):
     return row
 
 def read_locations(locations_file, _key=None):
-    with open(locations_file, 'r', encoding='utf-8') as instream:
+    with open(os.path.expandvars(locations_file)) as instream:
         return { location['Number']: location
                  for location in [normalize_location(row)
                                    for row in csv.DictReader(instream)
@@ -507,12 +506,6 @@ def storage(locations,
             port,
             tcp: bool,
             things):
-    # with open(os.path.expanduser(os.path.expandvars(config))) as config_file:
-    #     config = yaml.load(config_file)
-    #     print("config is", config)
-    # for defkey, defval in __dict__.items():
-    #     if isinstance(defval, str):
-    #         __dict__[defkey] = os.path.expandvars(defval)
     if server:
         global filenames
         filenames = {'inventory': os.path.basename(inventory),
