@@ -2,8 +2,8 @@
 import argparse
 import cmd
 import collections
-import csv
 import decouple
+import dobishem.storage
 import functools
 import json
 import math
@@ -13,6 +13,8 @@ import re
 import shlex
 import sys
 # import yaml
+
+from typing import List, Optional
 
 STORAGE_BASE=500000
 
@@ -80,8 +82,8 @@ class StorageShell(cmd.Cmd):
     combining the types."""
         capacity_by_type, volume, bookshelf_length, other_length, area = calculate_capacities(self.locations)
         for loctype in sorted(capacity_by_type.keys()):
-            label_width = max(*map(len, capacity_by_type.keys()))
-        self.outstream.write(loctype.rjust(label_width) + " " + str(math.ceil(capacity_by_type[loctype])) + "\n")
+            label_width = max([len(label) for label in capacity_by_type.keys()])
+            self.outstream.write(loctype.rjust(label_width) + " " + str(math.ceil(capacity_by_type[loctype])) + "\n")
         self.outstream.write("Total container volume: " + str(volume) + " litres\n")
         self.outstream.write("Total container and book (estimate) volume: "
                              + str(volume + bookshelf_length * bookshelf_area)
@@ -108,9 +110,9 @@ class StorageShell(cmd.Cmd):
                 subtypes[item_subtype] += 1
             else:
                 subtypes[item_subtype] = 1
-        for item_type in sorted(types.keys()):
+        for item_type in sorted(types.keys(), key=lambda x: x or ""):
             subtypes = types[item_type]
-            self.outstream.write((item_type if item_type != "" else "unspecified")
+            self.outstream.write((item_type or "unspecified")
                             + ": "
                             + str(functools.reduce(operator.add, subtypes.values()))
                             + "\n")
@@ -127,7 +129,7 @@ class StorageShell(cmd.Cmd):
     def do_list_items(self, *args):
         """Show a table of where all the items are."""
         # TODO: option to print table of where all inventory items are
-        by_location = defaultdict(list)
+        by_location = collections.defaultdict(list)
         for idx, item in self.items.items():
             if 'Normal location' in item:
                 by_location[item['Normal location']].append(idx)
@@ -208,21 +210,22 @@ class StorageShell(cmd.Cmd):
 
 def normalize_book_entry(row):
     ex_libris = row['Number']
-    if isinstance(ex_libris, str) and ex_libris != "":
-        ex_libris = int(ex_libris)
-        row['Number'] = ex_libris
+    row['Number'] = (int(ex_libris)
+                     if isinstance(ex_libris, str) and ex_libris != ""
+                     else 0)
     location = row['Location']
-    if isinstance(location, str) and location != "":
-        location = int(location)
-        row['Location'] = location
+    row['Location'] = (int(location)
+                       if isinstance(location, str) and location != ""
+                       else 0)
     return row
 
 def read_books(books_file, _key=None):
-    with open(os.path.expandvars(books_file)) as instream:
-        return { book['Number']: book
-                 for book in [normalize_book_entry(row)
-                              for row in csv.DictReader(instream)]
-                 if book['Number'] != "" }
+    return dobishem.storage.read_csv(books_file,
+                                     result_type=dict,
+                                     row_type=dict,
+                                     key_column='Number',
+                                     empty_for_missing=True,
+                                     transform_row=normalize_book_entry)
 
 # Description for reading these files using client_server.py:
 # ('Number', normalize_book_entry)
@@ -240,33 +243,27 @@ def books_matching(book_index, pattern):
             for book in book_index.values()
             if book_matches(book, pattern) ]
 
-unlabelled = -1
+unlabelled = 0
 
 def normalize_item_entry(row):
     global unlabelled
     label_number = row.get('Label number', "")
-    if isinstance(label_number, str) and label_number != "":
-        label_number = int(label_number)
-        row['Label number'] = label_number
-    else:
-        row['Label number'] = unlabelled
-        unlabelled -= 1
+    row['Label number'] = (int(label_number)
+                           if isinstance(label_number, str) and label_number != ""
+                           else (unlabelled := unlabelled-1))
     normal_location = row['Normal location']
-    if isinstance(normal_location, str) and re.match("[0-9]+", normal_location):
-        normal_location = int(normal_location)
-        row['Normal location'] = normal_location
+    row['Normal location'] = (int(normal_location)
+                              if isinstance(normal_location, str) and re.match("[0-9]+", normal_location)
+                              else 0)
     return row
 
 def read_inventory(inventory_file, _key=None):
-    filename = os.path.expandvars(inventory_file)
-    if os.path.exists(filename):
-        with open(filename) as instream:
-            return {item['Label number']: item
-                    for item in map(normalize_item_entry,
-                                    [row
-                                     for row in csv.DictReader(instream)])}
-    else:
-        return {}
+    return dobishem.storage.read_csv(inventory_file,
+                                     result_type=dict,
+                                     row_type=dict,
+                                     key_column='Label number',
+                                     empty_for_missing=True,
+                                     transform_row=normalize_item_entry)
 
 # Description for reading these files using client_server.py:
 # ('Label number', normalize_item_entry)
@@ -305,11 +302,12 @@ def normalize_location(row):
     return row
 
 def read_locations(locations_file, _key=None):
-    with open(os.path.expandvars(locations_file)) as instream:
-        return { location['Number']: location
-                 for location in [normalize_location(row)
-                                   for row in csv.DictReader(instream)
-                                   if row['Number'] is not None ] }
+    return dobishem.storage.read_csv(locations_file,
+                                     result_type=dict,
+                                     row_type=dict,
+                                     key_column='Number',
+                                     empty_for_missing=True,
+                                     transform_row=normalize_location)
 
 # Description for reading these files using client_server.py:
 # ('Number', normalize_location)
@@ -501,12 +499,12 @@ def storage(locations,
             inventory,
             stock,
             project_parts,
-            server: bool,
-            cli: bool,
-            host: str,
-            port,
-            tcp: bool,
-            things):
+            server: bool=False,
+            cli: bool=False,
+            host: str=None,
+            port: str=None,
+            tcp: bool=True,
+            things: Optional[List[str]]=None):
     if server:
         global filenames
         filenames = {'inventory': os.path.basename(inventory),
