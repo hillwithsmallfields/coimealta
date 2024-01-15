@@ -24,40 +24,49 @@ try:
 except:
     HAS_CLIENT_SERVER = False
 
+INVENTORY_COLUMNS = "Label number,Item,Type,Subtype,Subsubtype,Normal location,Origin,Acquired,Brand,Model,Serial number,Usefulness,Nostalgia,Fun,Approx value when bought,Condition,Status,Disposal,Notes".split(",")
+BOOK_COLUMNS = "Number,MediaType,Title,Authors,Publisher,Year,ISBN,Area,Subject,Language,Source,Acquired,Location,Read,Lent,Comments".split(",")
+
 class Storer:
 
-    def __init__(self, locations, items, books, initial_type="books"):
+    def __init__(self, locations, items, books, initial_type='book'):
         self.locations = locations
         self.items = items
         self.books = books
-        self.current_type = initial_type
+        self.current_type = initial_type[0:4]
         self.current_location = None
 
     def store(self, token):
-        if token in ('books', 'items'):
-            self.current_type = token
-        elif token == 'quit':
-            return False
+        if token in ('book', 'books', 'item', 'items'):
+            self.current_type = token[0:4]
+            return False, False
         else:
             token = int(token)
             if token >= STORAGE_BASE:
-                self.current_location = token
+                self.current_location = token - STORAGE_BASE
+                return False, False
             else:
                 if self.current_type == 'book':
                     store_book(self.books, token, self.current_location)
+                    return False, True
                 else:
                     store_item(self.items, token, self.current_location)
-            return True
+                    return True, False
 
 class StorageShell(cmd.Cmd):
 
     prompt = "Storage> "
 
-    def __init__(self, outstream, locations, items, books):
+    def __init__(self, outstream,
+                 locations,
+                 items_file, items,
+                 books_file, books):
         super().__init__()
         self.outstream = outstream
         self.locations = locations
+        self.items_file = items_file
         self.items = items
+        self.books_file = books_file
         self.books = books
 
     def postcmd(self, stop, _line):
@@ -179,7 +188,6 @@ class StorageShell(cmd.Cmd):
     def do_find_things(self, *args):
         """Show the locations of things.
         This finds books, other items, and locations."""
-        print("Looking for", *args)
         findings = {}
         for thing in args:
             if re.match("[0-9]+", thing):
@@ -194,19 +202,40 @@ class StorageShell(cmd.Cmd):
             self.outstream.write(finding + " is " + findings[finding] + "\n")
         return False
 
-    def do_store(self, thing_type="books", *args):
+    def do_store(self, *args):
         """Put things into locations."""
+        items_stored = False
+        books_stored = False
+        thing_type="books"
         storer = Storer(self.locations, self.items, self.books, initial_type=thing_type)
         if args:
             for arg in args:
-                storer.store(arg)
+                for word in arg.split(' '):
+                    item_stored, book_stored = storer.store(word)
+                    items_stored |= item_stored
+                    books_stored |= book_stored
         else:
             done = False
-            while not done:
-                for token in sys.stdin.readline().split():
-                    if not storer.store(token):
+            for line in sys.stdin.readlines():
+                for token in line.split():
+                    if token == 'quit':
                         done = True
                         break
+                    item_stored, book_stored = storer.store(token)
+                    items_stored |= item_stored
+                    books_stored |= book_stored
+                if done:
+                    break
+        if items_stored:
+            with dobishem.storage.FileProtection(self.items_file):
+                dobishem.storage.write_csv(self.items_file,
+                                           self.items,
+                                           sort_columns=INVENTORY_COLUMNS)
+        if books_stored:
+            with dobishem.storage.FileProtection(self.books_file):
+                dobishem.storage.write_csv(self.books_file,
+                                           self.books,
+                                           sort_columns=BOOK_COLUMNS)
 
 def normalize_book_entry(row):
     ex_libris = row['Number']
@@ -257,11 +286,11 @@ def normalize_item_entry(row):
                               else 0)
     return row
 
-def read_inventory(inventory_file, _key=None):
+def read_inventory(inventory_file, key='Label number'):
     return dobishem.storage.read_csv(inventory_file,
                                      result_type=dict,
                                      row_type=dict,
-                                     key_column='Label number',
+                                     key_column=key,
                                      empty_for_missing=True,
                                      transform_row=normalize_item_entry)
 
@@ -454,10 +483,14 @@ def storage_server_function(in_string, files_data):
         else:
             items_data = remembered_items_data['combined']
         output_catcher = io.StringIO()
-        StorageShell(output_catcher,
-                     files_data[filenames['locations']],
-                     items_data,
-                     files_data[filenames['books']]).onecmd(in_string)
+        StorageShell(
+            outstream=output_catcher,
+            locations=files_data[filenames['locations']],
+            items_file=inventory,
+            items=items_data,
+            books_file=filenames['books'],
+            books=files_data[filenames['books']],
+        ).onecmd(in_string)
         return output_catcher.getvalue()
     else:
         return "Command was empty"
@@ -534,16 +567,22 @@ def storage(locations,
                                       query_key=query_key,
                                       reply_key=reply_key)
     else:
-        locations = read_locations(locations)
-        items = read_inventory(inventory)
-        items.update(read_inventory(stock))
-        items.update(read_inventory(project_parts))
-        books = read_books(books)
-        command_handler = StorageShell(sys.stdout, locations, items, books)
+        # now we're writing data back, don't merge these in
+        # TODO: work out what to do instead for these
+        # items.update(read_inventory(stock))
+        # items.update(read_inventory(project_parts))
+        command_handler = StorageShell(outstream=sys.stdout,
+                                       locations=read_locations(locations),
+                                       items_file=inventory,
+                                       items=read_inventory(inventory),
+                                       books_file=books,
+                                       books=read_books(books))
         if cli:
             command_handler.cmdloop()
         else:
-            if things[0] in command_handler.completenames(""):
+            if (things[0]
+                # the list of command keywords
+                in command_handler.completenames("")):
                 command_handler.onecmd(" ".join(things))
             else:
                 command_handler.onecmd("find_things " + " ".join(things))
