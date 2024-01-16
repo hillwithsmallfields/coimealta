@@ -2,7 +2,7 @@
 
 import argparse
 import re
-import contacts_data
+import coimealta.contacts.contacts_data as contacts_data
 from collections import defaultdict
 
 def offspring(person):
@@ -20,7 +20,7 @@ def siblings(person):
 def name_to_ID(name, by_name):
     name = name.replace('_', ' ')
     if name not in by_name:
-        print("not found:", name)
+        print("Name", name, "not found")
     return by_name[name]['ID'] if name in by_name else "Z0Z0"
 
 def normalize_to_IDs(people, by_name):
@@ -109,7 +109,11 @@ def link_contacts(by_id, by_name):
     for person_id, person in by_id.items():
         partner_ids = person['Partners']
         if len(partner_ids) == 1: # don't try this on non-monogamists
-            partner = by_id[next(iter(partner_ids))]
+            partner_id = next(iter(partner_ids))
+            if partner_id not in by_id:
+                print("Could not find partner", partner_id, "of", person['Given name'], person['Surname'])
+                continue
+            partner = by_id[partner_id]
             partners_partners = partner['Partners']
             if len(partners_partners) == 0: # again, for monogamists only
                 partner['Partners'].add(person_id)
@@ -171,14 +175,16 @@ def link_contacts_main(input_file, analyze, graph, output_file):
         print("}")
 
     if analyze:
-        n_people, by_gender, by_nationality, by_place_met, by_title, ordained, doctored, flagged
         analysis = analyze_contacts(by_id)
+        n_people = analysis['n_people']
         print(n_people, "people")
         print_summary(analysis['by_nationality'], "nationalities:")
         print_summary(analysis['by_gender'], "genders:")
         print_summary(analysis['by_title'], "titles:")
         print_summary(analysis['by_place_met'], "places met:")
+        ordained = analysis['ordained']
         print("%d ordained (%d%% of the people you know)" % (ordained, ordained*100 / n_people))
+        doctored = analysis['doctored']
         print("%d with doctorates (%d%% of the people you know)" % (doctored, doctored * 100 / n_people))
         return analysis
     else:

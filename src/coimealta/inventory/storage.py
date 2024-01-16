@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import argparse
 import cmd
-import csv
+import collections
 import decouple
+import dobishem.storage
 import functools
-import io
 import json
 import math
 import operator
@@ -14,22 +14,59 @@ import shlex
 import sys
 # import yaml
 
-source_dir = os.path.dirname(os.path.realpath(__file__))
-# This corresponds to https://github.com/hillwithsmallfields
-my_projects = os.path.dirname(os.path.dirname(source_dir))
-sys.path.append(os.path.join(my_projects, "Simple_client_server"))
+from typing import List, Optional
 
-import client_server # the shell script ../storage makes this available
+STORAGE_BASE=500000
+
+HAS_CLIENT_SERVER = True
+try:
+    import simple_client_server.client_server as client_server
+except:
+    HAS_CLIENT_SERVER = False
+
+INVENTORY_COLUMNS = "Label number,Item,Type,Subtype,Subsubtype,Normal location,Origin,Acquired,Brand,Model,Serial number,Usefulness,Nostalgia,Fun,Approx value when bought,Condition,Status,Disposal,Notes".split(",")
+BOOK_COLUMNS = "Number,MediaType,Title,Authors,Publisher,Year,ISBN,Area,Subject,Language,Source,Acquired,Location,Read,Lent,Comments".split(",")
+
+class Storer:
+
+    def __init__(self, locations, items, books, initial_type='book'):
+        self.locations = locations
+        self.items = items
+        self.books = books
+        self.current_type = initial_type[0:4]
+        self.current_location = None
+
+    def store(self, token):
+        if token in ('book', 'books', 'item', 'items'):
+            self.current_type = token[0:4]
+            return False, False
+        else:
+            token = int(token)
+            if token >= STORAGE_BASE:
+                self.current_location = token - STORAGE_BASE
+                return False, False
+            else:
+                if self.current_type == 'book':
+                    store_book(self.books, token, self.current_location)
+                    return False, True
+                else:
+                    store_item(self.items, token, self.current_location)
+                    return True, False
 
 class StorageShell(cmd.Cmd):
 
     prompt = "Storage> "
 
-    def __init__(self, outstream, locations, items, books):
+    def __init__(self, outstream,
+                 locations,
+                 items_file, items,
+                 books_file, books):
         super().__init__()
         self.outstream = outstream
         self.locations = locations
+        self.items_file = items_file
         self.items = items
+        self.books_file = books_file
         self.books = books
 
     def postcmd(self, stop, _line):
@@ -37,15 +74,12 @@ class StorageShell(cmd.Cmd):
 
     def do_list_books(self, *_args):
         """Show a table of where all the books are."""
-        by_location = {}
+        by_location = collections.defaultdict(list)
         for idx, book in self.books.items():
             if 'Location' in book:
-                loc = book['Location']
-                if loc in by_location:
-                    by_location[loc].append(idx)
-                else:
-                    by_location[loc] = [idx]
-        for loc, contents in by_location.items():
+                by_location[book['Location']].append(idx)
+        for loc in sorted(by_location.keys()):
+            contents = by_location[loc]
             self.outstream.write(describe_nested_location(self.locations, loc) + ":\n")
             for title in sorted([self.books[idx]['Title'] for idx in contents ]):
                 self.outstream.write("    " + title + "\n")
@@ -57,8 +91,8 @@ class StorageShell(cmd.Cmd):
     combining the types."""
         capacity_by_type, volume, bookshelf_length, other_length, area = calculate_capacities(self.locations)
         for loctype in sorted(capacity_by_type.keys()):
-            label_width = max(*map(len, capacity_by_type.keys()))
-        self.outstream.write(loctype.rjust(label_width) + " " + str(math.ceil(capacity_by_type[loctype])) + "\n")
+            label_width = max([len(label) for label in capacity_by_type.keys()])
+            self.outstream.write(loctype.rjust(label_width) + " " + str(math.ceil(capacity_by_type[loctype])) + "\n")
         self.outstream.write("Total container volume: " + str(volume) + " litres\n")
         self.outstream.write("Total container and book (estimate) volume: "
                              + str(volume + bookshelf_length * bookshelf_area)
@@ -85,9 +119,9 @@ class StorageShell(cmd.Cmd):
                 subtypes[item_subtype] += 1
             else:
                 subtypes[item_subtype] = 1
-        for item_type in sorted(types.keys()):
+        for item_type in sorted(types.keys(), key=lambda x: x or ""):
             subtypes = types[item_type]
-            self.outstream.write((item_type if item_type != "" else "unspecified")
+            self.outstream.write((item_type or "unspecified")
                             + ": "
                             + str(functools.reduce(operator.add, subtypes.values()))
                             + "\n")
@@ -103,16 +137,13 @@ class StorageShell(cmd.Cmd):
 
     def do_list_items(self, *args):
         """Show a table of where all the items are."""
-        # todo: option to print table of where all inventory items are
-        by_location = {}
+        # TODO: option to print table of where all inventory items are
+        by_location = collections.defaultdict(list)
         for idx, item in self.items.items():
             if 'Normal location' in item:
-                loc = item['Normal location']
-                if loc in by_location:
-                    by_location[loc].append(idx)
-                else:
-                    by_location[loc] = [idx]
-        for loc, contents in by_location.items():
+                by_location[item['Normal location']].append(idx)
+        for loc in sorted(by_location.keys()):
+            contents = by_location[loc]
             self.outstream.write(describe_nested_location(self.locations, loc) + ":\n")
             for title in sorted([self.items[idx]['Item'] for idx in contents ]):
                 self.outstream.write("    " + title + "\n")
@@ -150,14 +181,13 @@ class StorageShell(cmd.Cmd):
 
     def do_list_locations(self, *things):
         """List everything that is in the matching locations."""
-        for where in locations_matching_patterns(self.locations, things):
+        for where in sorted(locations_matching_patterns(self.locations, things)):
             list_location(self.outstream, where, "", self.locations, self.items, self.books)
         return False
 
     def do_find_things(self, *args):
         """Show the locations of things.
         This finds books, other items, and locations."""
-        print("Looking for", *args)
         findings = {}
         for thing in args:
             if re.match("[0-9]+", thing):
@@ -172,23 +202,59 @@ class StorageShell(cmd.Cmd):
             self.outstream.write(finding + " is " + findings[finding] + "\n")
         return False
 
+    def do_store(self, *args):
+        """Put things into locations."""
+        items_stored = False
+        books_stored = False
+        thing_type="books"
+        storer = Storer(self.locations, self.items, self.books, initial_type=thing_type)
+        if args:
+            for arg in args:
+                for word in arg.split(' '):
+                    item_stored, book_stored = storer.store(word)
+                    items_stored |= item_stored
+                    books_stored |= book_stored
+        else:
+            done = False
+            for line in sys.stdin.readlines():
+                for token in line.split():
+                    if token == 'quit':
+                        done = True
+                        break
+                    item_stored, book_stored = storer.store(token)
+                    items_stored |= item_stored
+                    books_stored |= book_stored
+                if done:
+                    break
+        if items_stored:
+            with dobishem.storage.FileProtection(self.items_file):
+                dobishem.storage.write_csv(self.items_file,
+                                           self.items,
+                                           sort_columns=INVENTORY_COLUMNS)
+        if books_stored:
+            with dobishem.storage.FileProtection(self.books_file):
+                dobishem.storage.write_csv(self.books_file,
+                                           self.books,
+                                           sort_columns=BOOK_COLUMNS)
+
 def normalize_book_entry(row):
     ex_libris = row['Number']
-    if isinstance(ex_libris, str) and ex_libris != "":
-        ex_libris = int(ex_libris)
-        row['Number'] = ex_libris
+    row['Number'] = (int(ex_libris)
+                     if isinstance(ex_libris, str) and ex_libris != ""
+                     else 0)
     location = row['Location']
-    if isinstance(location, str) and location != "":
-        location = int(location)
-        row['Location'] = location
+    row['Location'] = (int(location)
+                       if isinstance(location, str) and location != ""
+                       else 0)
     return row
 
 def read_books(books_file, _key=None):
-    with io.open(books_file, 'r', encoding='utf-8') as instream:
-        return { book['Number']: book
-                 for book in [normalize_book_entry(row)
-                              for row in csv.DictReader(instream)]
-                 if book['Number'] != "" }
+    return dobishem.storage.read_csv(books_file,
+                                     result_type=dict,
+                                     row_type=dict,
+                                     key_column='Number',
+                                     empty_for_missing=True,
+                                     transform_row=normalize_book_entry)
 
 # Description for reading these files using client_server.py:
 # ('Number', normalize_book_entry)
@@ -206,32 +272,27 @@ def books_matching(book_index, pattern):
             for book in book_index.values()
             if book_matches(book, pattern) ]
 
-unlabelled = -1
+unlabelled = 0
 
 def normalize_item_entry(row):
     global unlabelled
     label_number = row.get('Label number', "")
-    if isinstance(label_number, str) and label_number != "":
-        label_number = int(label_number)
-        row['Label number'] = label_number
-    else:
-        row['Label number'] = unlabelled
-        unlabelled -= 1
+    row['Label number'] = (int(label_number)
+                           if isinstance(label_number, str) and label_number != ""
+                           else (unlabelled := unlabelled-1))
     normal_location = row['Normal location']
-    if isinstance(normal_location, str) and re.match("[0-9]+", normal_location):
-        normal_location = int(normal_location)
-        row['Normal location'] = normal_location
+    row['Normal location'] = (int(normal_location)
+                              if isinstance(normal_location, str) and re.match("[0-9]+", normal_location)
+                              else 0)
     return row
 
-def read_inventory(inventory_file, _key=None):
-    if os.path.exists(inventory_file):
-        with io.open(inventory_file, 'r', encoding='utf-8') as instream:
-            return { item['Label number']: item
-                     for item in map(normalize_item_entry,
-                                     [row
-                                       for row in csv.DictReader(instream) ])}
-    else:
-        return {}
+def read_inventory(inventory_file, key='Label number'):
+    return dobishem.storage.read_csv(inventory_file,
+                                     result_type=dict,
+                                     row_type=dict,
+                                     key_column=key,
+                                     empty_for_missing=True,
+                                     transform_row=normalize_item_entry)
 
 # Description for reading these files using client_server.py:
 # ('Label number', normalize_item_entry)
@@ -246,6 +307,14 @@ def items_matching(inventory_index, pattern):
     return [item
              for item in inventory_index.values()
              if item_matches(item, pattern) ]
+
+def store_item(inventory_index, item, location):
+    """Record that an item is in a location."""
+    inventory_index[item]['Normal location'] = location
+
+def store_book(inventory_index, book, location):
+    """Record that a book is in a location."""
+    inventory_index[book]['Location'] = location
 
 def normalize_location(row):
     contained_within = row['ContainedWithin']
@@ -262,11 +331,12 @@ def normalize_location(row):
     return row
 
 def read_locations(locations_file, _key=None):
-    with io.open(locations_file, 'r', encoding='utf-8') as instream:
-        return { location['Number']: location
-                 for location in [normalize_location(row)
-                                   for row in csv.DictReader(instream)
-                                   if row['Number'] is not None ] }
+    return dobishem.storage.read_csv(locations_file,
+                                     result_type=dict,
+                                     row_type=dict,
+                                     key_column='Number',
+                                     empty_for_missing=True,
+                                     transform_row=normalize_location)
 
 # Description for reading these files using client_server.py:
 # ('Number', normalize_location)
@@ -385,23 +455,6 @@ def list_location(outstream, location, prefix, locations, items, books):
             outstream.write(next_prefix + subloc['Description'] + "\n")
             list_location(outstream, subloc, next_prefix, locations, items, books)
 
-def cmd_bad(outstream, _args, _locations, _items, _books):
-    """Report an invalid command."""
-    outstream.write("""Bad command; enter "help" to get a list of commands\n""")
-    return True
-
-def run_command(outstream,
-                command,
-                things,
-                locations,
-                items, books):
-    # todo: change the arguments to these functions, to take a dictionary mapping standard names to the used names, and one mapping the used names to the data
-    return commands.get(command, cmd_bad)(outstream,
-                                          things,
-                                          locations,
-                                          items,
-                                          books)
-
 filenames = {}
 
 remembered_items_data = {'combined': None,
@@ -430,16 +483,14 @@ def storage_server_function(in_string, files_data):
         else:
             items_data = remembered_items_data['combined']
         output_catcher = io.StringIO()
-        StorageShell(output_catcher,
-                     files_data[filenames['locations']],
-                     items_data,
-                     files_data[filenames['books']]).onecmd(in_string)
-        run_command(output_catcher,
-                    command_parts[0],
-                    command_parts[1:],
-                    files_data[filenames['locations']],
-                    items_data,
-                    files_data[filenames['books']])
+        StorageShell(
+            outstream=output_catcher,
+            locations=files_data[filenames['locations']],
+            items_file=inventory,
+            items=items_data,
+            books_file=filenames['books'],
+            books=files_data[filenames['books']],
+        ).onecmd(in_string)
         return output_catcher.getvalue()
     else:
         return "Command was empty"
@@ -450,26 +501,27 @@ def get_args():
     #                     default="/usr/local/share/storage.yaml",
     #                     help="""The config file for the storage system.""")
     parser.add_argument("--locations", "-f",
-                        default="$ORG/storage.csv",
+                        default=os.path.expandvars("$ORG/storage.csv"),
                         help="""The CSV file containing the storage locations.""")
     parser.add_argument("--books", "-b",
-                        default="$ORG/books.csv",
+                        default=os.path.expandvars("$ORG/books.csv"),
                         help="""The CSV file containing the book catalogue.""")
     parser.add_argument("--inventory", "-i",
-                        default="$ORG/inventory.csv",
+                        default=os.path.expandvars("$ORG/inventory.csv"),
                         help="""The CSV file containing the general inventory.""")
     parser.add_argument("--stock", "-s",
-                        default="$ORG/stock.csv",
+                        default=os.path.expandvars("$ORG/stock.csv"),
                         help="""The CSV file containing the stock material inventory.""")
     parser.add_argument("--project-parts", "-p",
-                        default="$ORG/project-parts.csv",
+                        default=os.path.expandvars("$ORG/project-parts.csv"),
                         help="""The CSV file containing the project parts inventory.""")
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument("--server", action='store_true',
                         help="""Run a little CLI on a network socket.""")
     actions.add_argument("--cli", action='store_true',
                          help="""Run a little CLI on stdin and stdout.""")
-    client_server.client_server_add_arguments(parser, 9797)
+    if HAS_CLIENT_SERVER:
+        client_server.client_server_add_arguments(parser, 9797, include_keys=False)
     parser.add_argument("things",
                         nargs='*',
                         help="""The things to look for.""")
@@ -480,57 +532,60 @@ def storage(locations,
             inventory,
             stock,
             project_parts,
-            server: bool,
-            cli: bool,
-            things):
-    # with open(os.path.expanduser(os.path.expandvars(config))) as config_file:
-    #     config = yaml.load(config_file)
-    #     print("config is", config)
-    for defkey, defval in __dict__.items():
-        if isinstance(defval, str):
-            __dict__[defkey] = os.path.expandvars(defval)
+            server: bool=False,
+            cli: bool=False,
+            host: str=None,
+            port: str=None,
+            tcp: bool=True,
+            things: Optional[List[str]]=None):
     if server:
-        query_passphrase = decouple.config('query_passphrase')
-        reply_passphrase = decouple.config('reply_passphrase')
-        client_server.check_private_key_privacy(args)
-        query_key, reply_key = client_server.read_keys_from_files(args,
-                                                                  query_passphrase,
-                                                                  reply_passphrase)
         global filenames
         filenames = {'inventory': os.path.basename(inventory),
                      'books': os.path.basename(books),
                      'stock': os.path.basename(stock),
                      'project_parts': os.path.basename(project_parts),
                      'locations': os.path.basename(locations)}
-        client_server.run_servers(host, int(port),
-                                  getter=storage_server_function,
-                                  files={inventory: ('Label number',
-                                                          normalize_item_entry),
-                                         books: ('Number',
-                                                      normalize_book_entry),
-                                         stock: ('Label number',
-                                                      normalize_item_entry),
-                                         project_parts: ('Label number',
+        if HAS_CLIENT_SERVER:
+            query_passphrase = decouple.config('query_passphrase')
+            reply_passphrase = decouple.config('reply_passphrase')
+            client_server.check_private_key_privacy(args)
+            query_key, reply_key = client_server.read_keys_from_files(args,
+                                                                      query_passphrase,
+                                                                      reply_passphrase)
+            client_server.run_servers(host, int(port),
+                                      getter=storage_server_function,
+                                      files={inventory: ('Label number',
                                                               normalize_item_entry),
-                                         locations: ('Number',
-                                                          normalize_location)},
-                                  query_key=query_key,
-                                  reply_key=reply_key)
+                                             books: ('Number',
+                                                          normalize_book_entry),
+                                             stock: ('Label number',
+                                                          normalize_item_entry),
+                                             project_parts: ('Label number',
+                                                                  normalize_item_entry),
+                                             locations: ('Number',
+                                                              normalize_location)},
+                                      query_key=query_key,
+                                      reply_key=reply_key)
     else:
-        locations = read_locations(locations)
-        items = read_inventory(inventory)
-        items.update(read_inventory(stock))
-        items.update(read_inventory(project_parts))
-        books = read_books(books)
+        # now we're writing data back, don't merge these in
+        # TODO: work out what to do instead for these
+        # items.update(read_inventory(stock))
+        # items.update(read_inventory(project_parts))
+        command_handler = StorageShell(outstream=sys.stdout,
+                                       locations=read_locations(locations),
+                                       items_file=inventory,
+                                       items=read_inventory(inventory),
+                                       books_file=books,
+                                       books=read_books(books))
         if cli:
-            StorageShell(sys.stdout, locations, items, books).cmdloop()
+            command_handler.cmdloop()
         else:
-            if things[0] in commands:
-                run_command(sys.stdout, things[0], things[1:],
-                            locations, items, books)
+            if (things[0]
+                # the list of command keywords
+                in command_handler.completenames("")):
+                command_handler.onecmd(" ".join(things))
             else:
-                run_command(sys.stdout, "where", things,
-                            locations, items, books)
+                command_handler.onecmd("find_things " + " ".join(things))
 
 if __name__ == "__main__":
     storage(**get_args())
