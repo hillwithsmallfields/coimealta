@@ -9,7 +9,8 @@ PERISHABLES_FILE = os.path.expandvars("$SYNCED/org/perishables.csv")
 
 def convert_row(row):
     row['Best before'] = datetime.date.fromisoformat(row['Best before'])
-    row['Quantity'] = 1 if row['Quantity'] == "" else int(row['Quantity'])
+    print("converting row", row)
+    row['Quantity'] = 1 if row['Quantity'] in (None, "") else int(row['Quantity'])
     return row
 
 def get_perishables():
