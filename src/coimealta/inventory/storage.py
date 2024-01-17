@@ -25,31 +25,48 @@ except:
     HAS_CLIENT_SERVER = False
 
 INVENTORY_COLUMNS = "Label number,Item,Type,Subtype,Subsubtype,Normal location,Origin,Acquired,Brand,Model,Serial number,Usefulness,Nostalgia,Fun,Approx value when bought,Condition,Status,Disposal,Notes".split(",")
-BOOK_COLUMNS = "Number,MediaType,Title,Authors,Publisher,Year,ISBN,Area,Subject,Language,Source,Acquired,Location,Read,Lent,Comments".split(",")
+BOOK_COLUMNS = "Number,MediaType,Title,Authors,Publisher,Year,ISBN,Area,Subject,Language,Source,Acquired,Location,Read,Lent,Comments,webchecked".split(",")
 
 class Storer:
 
-    def __init__(self, locations, items, books, initial_type='book'):
+    def __init__(self, locations, items, books, initial_type='book', verbose=False):
         self.locations = locations
         self.items = items
         self.books = books
         self.current_type = initial_type[0:4]
         self.current_location = None
+        self.verbose=verbose
 
     def store(self, token):
         if token in ('book', 'books', 'item', 'items'):
             self.current_type = token[0:4]
             return False, False
         else:
+            if not token:
+                return False, False
             token = int(token)
             if token >= STORAGE_BASE:
                 self.current_location = token - STORAGE_BASE
+                self.current_type = ('book'
+                                     if self.locations.get('Type') == 'bookshelf'
+                                     else 'item')
+                if verbose:
+                    print("switched to storing %ss as the current location is a %s" % (
+                        self.current_type, self.current_location))
                 return False, False
             else:
                 if self.current_type == 'book':
+                    if self.verbose:
+                        print("storing book %s (%s) in location %s (%s)" % (
+                            self.books[token]['Title'], token,
+                            describe_location(self.locations.get(self.current_location)), self.current_location))
                     store_book(self.books, token, self.current_location)
                     return False, True
                 else:
+                    if self.verbose:
+                        print("storing item %s (%s) in location %s (%s)" % (
+                            self.books[token]['Name'], token,
+                            describe_location(self.locations.get(self.current_location)), self.current_location))
                     store_item(self.items, token, self.current_location)
                     return True, False
 
@@ -60,7 +77,8 @@ class StorageShell(cmd.Cmd):
     def __init__(self, outstream,
                  locations,
                  items_file, items,
-                 books_file, books):
+                 books_file, books,
+                 verbose=False):
         super().__init__()
         self.outstream = outstream
         self.locations = locations
@@ -68,6 +86,7 @@ class StorageShell(cmd.Cmd):
         self.items = items
         self.books_file = books_file
         self.books = books
+        self.verbose = verbose
 
     def postcmd(self, stop, _line):
         return stop
@@ -207,8 +226,11 @@ class StorageShell(cmd.Cmd):
         items_stored = False
         books_stored = False
         thing_type="books"
-        storer = Storer(self.locations, self.items, self.books, initial_type=thing_type)
-        if args:
+        storer = Storer(self.locations,
+                        self.items, self.books,
+                        initial_type=thing_type,
+                        verbose=self.verbose)
+        if args and any(args):  # ignore empty args
             for arg in args:
                 for word in arg.split(' '):
                     item_stored, book_stored = storer.store(word)
@@ -378,7 +400,7 @@ def describe_location(where):
             if (storage_type == "shelf"
                 and not re.search("shelves", description)):
                 description += " " + storage_type
-    description = ("on " if storage_type == "shelf" else "in ") + description
+    description = ("on " if storage_type in ("shelf", "bookshelf") else "in ") + description
     return description
 
 def nested_location(locations, location):
@@ -515,6 +537,9 @@ def get_args():
     parser.add_argument("--project-parts", "-p",
                         default=os.path.expandvars("$ORG/project-parts.csv"),
                         help="""The CSV file containing the project parts inventory.""")
+    parser.add_argument("--verbose", "-v",
+                        action='store_true',
+                        help="""Output explanatory information.""")
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument("--server", action='store_true',
                         help="""Run a little CLI on a network socket.""")
@@ -532,6 +557,7 @@ def storage(locations,
             inventory,
             stock,
             project_parts,
+            verbose: bool=False,
             server: bool=False,
             cli: bool=False,
             host: str=None,
@@ -576,7 +602,8 @@ def storage(locations,
                                        items_file=inventory,
                                        items=read_inventory(inventory),
                                        books_file=books,
-                                       books=read_books(books))
+                                       books=read_books(books),
+                                       verbose=verbose)
         if cli:
             command_handler.cmdloop()
         else:
