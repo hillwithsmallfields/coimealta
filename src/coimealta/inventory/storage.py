@@ -2,7 +2,6 @@
 import argparse
 import cmd
 import collections
-import decouple
 import dobishem.storage
 import functools
 import json
@@ -12,9 +11,10 @@ import os
 import re
 import shlex
 import sys
-# import yaml
 
 from typing import List, Optional
+
+import decouple
 
 STORAGE_BASE=500000
 
@@ -26,6 +26,41 @@ except:
 
 INVENTORY_COLUMNS = "Label number,Item,Type,Subtype,Subsubtype,Normal location,Origin,Acquired,Brand,Model,Serial number,Usefulness,Nostalgia,Fun,Approx value when bought,Condition,Status,Disposal,Notes".split(",")
 BOOK_COLUMNS = "Number,MediaType,Title,Authors,Publisher,Year,ISBN,Area,Subject,Language,Source,Acquired,Location,Read,Lent,Comments,webchecked".split(",")
+LOCATION_COLUMNS = "Number,Description,Level,Type,Variety,Size,ContainedWithin".split(",")
+
+# What plausibly stacks within what:
+HIERARCHY = {
+    'bag': 1,
+    'box': 1,
+    'chest': 1,
+    'crate': 1,
+    'stacking crate': 1,
+    'bookshelf': 2,
+    'chair': 2,
+    'cupboard shelf': 2,
+    'drawer': 2,
+    'louvre panel': 2,
+    'racklevel': 2,
+    'shelf': 2,
+    'bay': 3,
+    'cupboard': 3,
+    'drawers': 3,
+    'dresser': 3,
+    'dressing table': 3,
+    'furniture': 3,
+    'pegboard': 3,
+    'pigeonholes': 3,
+    'rack': 3,
+    'shelves': 3,
+    'stand': 3,
+    'room': 4,
+    'building': 5,
+    'vehicle': 5,
+    }
+
+# factor to convert metre of bookshelf to litre of books
+# the 10 is because a litre is a decimetre along each side
+BOOKSHELF_AREA = 10 * 2 * 1.5
 
 class Storer:
 
@@ -35,52 +70,81 @@ class Storer:
         self.books = books
         self.current_type = initial_type[0:4]
         self.current_location = None
+        self.last_was_location = False
         self.verbose=verbose
 
     def store(self, token):
+        """Process a token in a token stream indicating where things are stored.
+
+        The token is currently assumed to be number, typically from a barcode scanner.
+
+        If it is in the range indicating a storage location, subsequent tokens will
+        be recorded as stored in that location."""
         if token in ('book', 'books', 'item', 'items'):
             self.current_type = token[0:4]
-            return False, False
+            return False, False, False
         else:
             if not token:
-                return False, False
+                return False, False, False
             token = int(token)
             if token >= STORAGE_BASE:
-                self.current_location = token - STORAGE_BASE
-                self.current_type = ('book'
-                                     if self.locations.get('Type') == 'bookshelf'
-                                     else 'item')
-                if verbose:
-                    print("switched to storing %ss as the current location is a %s" % (
-                        self.current_type, self.current_location))
-                return False, False
+                if self.last_was_location:
+                    # consecutive entries being locations means we're
+                    # indicating that subsequent locations are nested
+                    # within the first of this run of locations
+                    this_location = token - STORAGE_BASE
+                    outer = self.locations.get(self.current_location)
+                    if (inner := self.locations.get(this_location)):
+                        if HIERARCHY.get(inner, 0) < HIERARCHY.get(outer, 0):
+                            # boxes go on shelves, etc
+                            if self.verbose:
+                                print("nesting %s within %s", (inner['Description'], outer['Description']))
+                            inner['ContainedWithin'] = self.current_location
+                            return False, False, True
+                        else:
+                            # typically, move on to the next shelf
+                            self.current_location = this_location
+                            if self.verbose:
+                                print("moving on to recording within %s", inner['Description'])
+                else:
+                    self.current_location = token - STORAGE_BASE
+                    self.current_type = ('book'
+                                         if self.locations.get('Type') == 'bookshelf'
+                                         else 'item')
+                    if self.verbose:
+                        print("switched to storing %ss as the current location is a %s" % (
+                            self.current_type, self.current_location))
+                self.last_was_location = True
+                return False, False, False
             else:
+                self.last_was_location = False
                 if self.current_type == 'book':
                     if self.verbose:
                         print("storing book %s (%s) in location %s (%s)" % (
                             self.books[token]['Title'], token,
                             describe_location(self.locations.get(self.current_location)), self.current_location))
                     store_book(self.books, token, self.current_location)
-                    return False, True
+                    return False, True, False
                 else:
                     if self.verbose:
                         print("storing item %s (%s) in location %s (%s)" % (
                             self.books[token]['Name'], token,
                             describe_location(self.locations.get(self.current_location)), self.current_location))
                     store_item(self.items, token, self.current_location)
-                    return True, False
+                    return True, False, False
 
 class StorageShell(cmd.Cmd):
 
     prompt = "Storage> "
 
     def __init__(self, outstream,
-                 locations,
+                 locations_file, locations,
                  items_file, items,
                  books_file, books,
                  verbose=False):
         super().__init__()
         self.outstream = outstream
+        self.locations_file = locations_file
         self.locations = locations
         self.items_file = items_file
         self.items = items
@@ -114,7 +178,7 @@ class StorageShell(cmd.Cmd):
             self.outstream.write(loctype.rjust(label_width) + " " + str(math.ceil(capacity_by_type[loctype])) + "\n")
         self.outstream.write("Total container volume: " + str(volume) + " litres\n")
         self.outstream.write("Total container and book (estimate) volume: "
-                             + str(volume + bookshelf_length * bookshelf_area)
+                             + str(volume + bookshelf_length * BOOKSHELF_AREA)
                              + " litres\n")
         self.outstream.write("Total shelving length: "
                              + str(bookshelf_length + other_length)
@@ -222,9 +286,21 @@ class StorageShell(cmd.Cmd):
         return False
 
     def do_store(self, *args):
-        """Put things into locations."""
+        """Put things into locations.
+
+        It may be given a sequence of numbers as args; if not given any as args,
+        it will read the numbers from stdin.
+
+        Numbers may either be locations or items/books.  A location
+        sets where subsequent items or books will be stored.  Books
+        and other items will be distinguished by whether the location
+        is a bookshelf or not.  Consecutive locations represent the
+        storing of containers within containers (e.g. boxes on a
+        shelf).
+        """
         items_stored = False
         books_stored = False
+        locations_nested = False
         thing_type="books"
         storer = Storer(self.locations,
                         self.items, self.books,
@@ -233,9 +309,10 @@ class StorageShell(cmd.Cmd):
         if args and any(args):  # ignore empty args
             for arg in args:
                 for word in arg.split(' '):
-                    item_stored, book_stored = storer.store(word)
+                    item_stored, book_stored, location_nested = storer.store(word)
                     items_stored |= item_stored
                     books_stored |= book_stored
+                    locations_nested = location_nested
         else:
             done = False
             for line in sys.stdin.readlines():
@@ -243,9 +320,10 @@ class StorageShell(cmd.Cmd):
                     if token == 'quit':
                         done = True
                         break
-                    item_stored, book_stored = storer.store(token)
+                    item_stored, book_stored, location_nested = storer = storer.store(token)
                     items_stored |= item_stored
                     books_stored |= book_stored
+                    locations_nested = location_nested
                 if done:
                     break
         if items_stored:
@@ -258,8 +336,14 @@ class StorageShell(cmd.Cmd):
                 dobishem.storage.write_csv(self.books_file,
                                            self.books,
                                            sort_columns=BOOK_COLUMNS)
+        if locations_nested:
+            with dobishem.storage.FileProtection(self.locations_file):
+                dobishem.storage.write_csv(self.locations_file,
+                                           self.locations,
+                                           sort_columns=LOCATION_COLUMNS)
 
 def normalize_book_entry(row):
+    """Put the entry describing a book into our standard form."""
     ex_libris = row['Number']
     row['Number'] = (int(ex_libris)
                      if isinstance(ex_libris, str) and ex_libris != ""
@@ -271,6 +355,7 @@ def normalize_book_entry(row):
     return row
 
 def read_books(books_file, _key=None):
+    """Read the books file."""
     return dobishem.storage.read_csv(books_file,
                                      result_type=dict,
                                      row_type=dict,
@@ -282,6 +367,7 @@ def read_books(books_file, _key=None):
 # ('Number', normalize_book_entry)
 
 def book_matches(book, pattern):
+    """Return whether a pattern matches any of the main characteristics of a book,"""
     pattern = re.compile(pattern , re.IGNORECASE)
     return (book['Title'] and pattern.search(book['Title'])
             or book['Authors'] and pattern.search(book['Authors'])
@@ -290,6 +376,7 @@ def book_matches(book, pattern):
             or book['Area'] and pattern.search(book['Area']))
 
 def books_matching(book_index, pattern):
+    """Return a list of books matching a given pattern."""
     return [book
             for book in book_index.values()
             if book_matches(book, pattern) ]
@@ -297,6 +384,7 @@ def books_matching(book_index, pattern):
 unlabelled = 0
 
 def normalize_item_entry(row):
+    """Put an item entry into our standard form."""
     global unlabelled
     label_number = row.get('Label number', "")
     row['Label number'] = (int(label_number)
@@ -309,6 +397,7 @@ def normalize_item_entry(row):
     return row
 
 def read_inventory(inventory_file, key='Label number'):
+    """Read an inventory file."""
     return dobishem.storage.read_csv(inventory_file,
                                      result_type=dict,
                                      row_type=dict,
@@ -320,12 +409,14 @@ def read_inventory(inventory_file, key='Label number'):
 # ('Label number', normalize_item_entry)
 
 def item_matches(item, pattern):
+    """Return whether an item matches a pattern."""
     pattern = re.compile(pattern , re.IGNORECASE)
     return (pattern.search(item['Item'])
             or (item['Type'] and pattern.search(item['Type']))
             or (item['Subtype'] and pattern.search(item['Subtype'])))
 
 def items_matching(inventory_index, pattern):
+    """Return a list of items matching a pattern."""
     return [item
              for item in inventory_index.values()
              if item_matches(item, pattern) ]
@@ -339,6 +430,7 @@ def store_book(inventory_index, book, location):
     inventory_index[book]['Location'] = location
 
 def normalize_location(row):
+    """Put a location entry into our standard form."""
     contained_within = row['ContainedWithin']
     try:
         row['ContainedWithin'] = (int(contained_within)
@@ -353,6 +445,7 @@ def normalize_location(row):
     return row
 
 def read_locations(locations_file, _key=None):
+    """Read a storage locations file."""
     return dobishem.storage.read_csv(locations_file,
                                      result_type=dict,
                                      row_type=dict,
@@ -429,10 +522,6 @@ def sum_capacities(all_data, types):
                                       [all_data.get(loctype, 0)
                                        for loctype in types ]))
 
-# factor to convert meter of bookshelf to litre of books
-# the 10 is because a liter is a decimeter along each side
-bookshelf_area = 10 * 2 * 1.5
-
 def calculate_capacities(locations):
     capacity_by_type = {}
     for location in locations.values():
@@ -507,6 +596,7 @@ def storage_server_function(in_string, files_data):
         output_catcher = io.StringIO()
         StorageShell(
             outstream=output_catcher,
+            locations_file=filenames['locations'],
             locations=files_data[filenames['locations']],
             items_file=inventory,
             items=items_data,
@@ -598,6 +688,7 @@ def storage(locations,
         # items.update(read_inventory(stock))
         # items.update(read_inventory(project_parts))
         command_handler = StorageShell(outstream=sys.stdout,
+                                       locations_file=locations,
                                        locations=read_locations(locations),
                                        items_file=inventory,
                                        items=read_inventory(inventory),
