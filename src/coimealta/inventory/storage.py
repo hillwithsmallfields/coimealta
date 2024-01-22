@@ -71,7 +71,7 @@ class Storer:
         self.current_type = initial_type[0:4]
         self.current_location = None
         self.last_was_location = False
-        self.self.last_enclosing_previous_location = None
+        self.last_enclosing_previous_location = None
         self.last_enclosed = None
         self.verbose=verbose
 
@@ -97,10 +97,10 @@ class Storer:
                     this_location = token - STORAGE_BASE
                     outer = self.locations.get(self.current_location)
                     if (inner := self.locations.get(this_location)):
-                        if HIERARCHY.get(inner, 0) < HIERARCHY.get(outer, 0):
+                        if HIERARCHY.get(inner['Type'], 0) < HIERARCHY.get(outer['Type'], 0):
                             # boxes go on shelves, etc
                             if self.verbose:
-                                print("nesting %s within %s", (inner['Description'], outer['Description']))
+                                print("nesting %s within %s" % (inner['Description'], outer['Description']))
                             self.last_enclosing_previous_location = inner['ContainedWithin']
                             self.last_enclosed = inner
                             inner['ContainedWithin'] = self.current_location
@@ -109,15 +109,16 @@ class Storer:
                             # typically, move on to the next shelf
                             self.current_location = this_location
                             if self.verbose:
-                                print("moving on to recording within %s", inner['Description'])
+                                print("moving on to recording within %s" % inner['Description'])
                 else:
                     self.current_location = token - STORAGE_BASE
+                    old_type = self.current_type
                     self.current_type = ('book'
-                                         if self.locations.get('Type') == 'bookshelf'
+                                         if self.locations[self.current_location].get('Type') == 'bookshelf'
                                          else 'item')
-                    if self.verbose:
+                    if self.verbose and self.current_type != old_type:
                         print("switched to storing %ss as the current location is a %s" % (
-                            self.current_type, self.current_location))
+                            self.current_type, self.locations[self.current_location]['Type']))
                 self.last_was_location = True
                 return False, False, False
             else:
@@ -129,6 +130,8 @@ class Storer:
                     # placed on the shelf, but it will have been, as
                     # it will have been the last box placed on the
                     # shelf.  So undo that.
+                    if self.verbose:
+                        print("Undoing nesting of", self.last_enclosed['Description'])
                     self.last_enclosed['ContainedWithin'] = self.last_enclosing_previous_location
                     self.last_enclosing_previous_location = None
                 if self.current_type == 'book':
@@ -141,7 +144,7 @@ class Storer:
                 else:
                     if self.verbose:
                         print("storing item %s (%s) in location %s (%s)" % (
-                            self.books[token]['Name'], token,
+                            self.items[token]['Item'], token,
                             describe_location(self.locations.get(self.current_location)), self.current_location))
                     store_item(self.items, token, self.current_location)
                     return True, False, False
@@ -333,7 +336,7 @@ class StorageShell(cmd.Cmd):
                     if token == 'quit':
                         done = True
                         break
-                    item_stored, book_stored, location_nested = storer = storer.store(token)
+                    item_stored, book_stored, location_nested = storer.store(token)
                     items_stored |= item_stored
                     books_stored |= book_stored
                     locations_nested = location_nested
