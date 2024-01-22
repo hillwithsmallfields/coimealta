@@ -71,6 +71,8 @@ class Storer:
         self.current_type = initial_type[0:4]
         self.current_location = None
         self.last_was_location = False
+        self.self.last_enclosing_previous_location = None
+        self.last_enclosed = None
         self.verbose=verbose
 
     def store(self, token):
@@ -99,6 +101,8 @@ class Storer:
                             # boxes go on shelves, etc
                             if self.verbose:
                                 print("nesting %s within %s", (inner['Description'], outer['Description']))
+                            self.last_enclosing_previous_location = inner['ContainedWithin']
+                            self.last_enclosed = inner
                             inner['ContainedWithin'] = self.current_location
                             return False, False, True
                         else:
@@ -118,6 +122,15 @@ class Storer:
                 return False, False, False
             else:
                 self.last_was_location = False
+                if self.last_enclosing_previous_location:
+                    # We have just switched from putting boxes on
+                    # shelves to putting things in boxes.  We don't
+                    # want the box we're putting things in to be
+                    # placed on the shelf, but it will have been, as
+                    # it will have been the last box placed on the
+                    # shelf.  So undo that.
+                    self.last_enclosed['ContainedWithin'] = self.last_enclosing_previous_location
+                    self.last_enclosing_previous_location = None
                 if self.current_type == 'book':
                     if self.verbose:
                         print("storing book %s (%s) in location %s (%s)" % (
