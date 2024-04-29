@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import collections
 import os
 
 import coimealta.contacts.contacts_data as contacts_data
@@ -18,22 +19,25 @@ def family_graph_main(person, across, contacts, output):
 
     starting_person = by_name.get(person, by_id.get(person))
     if not starting_person:
-        print("Could not find", person)
         raise ValueError("Could not find " + person)
 
-    already_written = set()
-    already_linked = set()
+    already_seen = set()
+    already_linked = {}
+    couples = collections.defaultdict(set)
+    singles = set()
     queue = [starting_person['ID']]
 
     def add(p_id):
-        if p_id not in already_written:
+        if p_id not in already_seen:
             queue.append(p_id)
 
     def link(from_id, to_id, style):
-        link = (from_id, to_id) if from_id < to_id else (to_id, from_id)
-        if link not in already_linked:
-            outstream.write(f"      {from_id} -> {to_id} {style}\n")
-            already_linked.add(link)
+        link_key = (from_id, to_id) if from_id < to_id else (to_id, from_id)
+        if link_key not in already_linked:
+            already_linked[link_key] = f"      {from_id} -> {to_id} {style}\n"
+
+    def write_person(uid, person, margin="  "):
+        outstream.write(f"""{margin}{uid} [label="{person['_initialled_name_']}" shape={("hexagon" if person['Gender'] == 'm' else "octagon")} {"style=dashed" if person['Died'] else ""}]\n""")
 
     with open(output or (person + ".gv"), "w") as outstream:
         outstream.write("digraph {\n")
@@ -42,21 +46,34 @@ def family_graph_main(person, across, contacts, output):
         while queue:
             uid = queue.pop()
             person = by_id[uid]
-            already_written.add(uid)
-            outstream.write(f"""  {uid} [label="{person['_name_']}" shape={("box" if person['Gender'] == 'm' else "diamond")} {"style=dashed" if person['Died'] else ""}]\n""")
-            their_partners = person['Partners'] or []
+            already_seen.add(uid)
             their_offspring = person['Offspring'] or []
-            their_parents = person['Parents'] or []
-            for partner in their_partners:
-                link(uid, partner, "")
-                outstream.write("    {rank=same " + uid + " " + gv_people_list(their_partners) + "}\n")
-                add(partner)
             for offspring in their_offspring:
-                link(uid, offspring, "[style=dotted]")
+                link(uid, offspring, "[style=solid]")
                 add(offspring)
+            their_parents = person['Parents'] or []
             for parent in their_parents:
-                link(parent, uid, "[style=dashed]")
+                link(parent, uid, "[style=solid]")
                 add(parent)
+            their_partners = person['Partners']
+            if their_partners:
+                for partner in their_partners:
+                    couple_id = "_".join(sorted([uid] + list(their_partners)))
+                    couples[couple_id].add(uid)
+                    link(uid, partner, "[style=bold arrowhead=none]")
+                    add(partner)
+            else:
+                singles.add(uid)
+        for who in singles:
+            write_person(who, by_id[who])
+        for couple_key, couple_members in couples.items():
+            outstream.write(f"  subgraph cluster_{couple_key}" + " {\n")
+            for member in couple_members:
+                write_person(member, by_id[member], margin="    ")
+            outstream.write("  }\n")
+            # outstream.write("    {rank=same " + uid + " " + gv_people_list(their_partners) + "}\n")
+        for link in already_linked.values():
+            outstream.write(link)
         outstream.write("}\n")
 
 def get_args():

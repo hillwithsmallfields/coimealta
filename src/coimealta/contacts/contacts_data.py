@@ -47,6 +47,17 @@ def make_name(person):
             if middle_names
             else first_name + " " + surname)
 
+def make_initialled_name(person):
+    """Assemble a name from a person's fields."""
+    first_name = (person.get('Given name', "") or "")
+    middle_names = [name[0] + "."
+                    for name in (person.get('Middle names', "") or "").split(' ')
+                    if name]
+    surname = (person.get('Surname', "") or "")
+    return (first_name + " " + " ".join(middle_names) + " " + surname
+            if middle_names
+            else first_name + " " + surname)
+
 def make_short_name(person):
     """Make a short form of a person's name."""
     return ' '.join([(person.get('Given name', "") or "")]
@@ -214,6 +225,7 @@ def read_contacts(filename):
             name = make_name(row)
             short_name = make_short_name(row)
             row['_name_'] = name
+            row['_initialled_name_'] = make_initialled_name(row)
             people_by_name[name] = row
             # if short_name != name:
             #     people_by_name[short_name] = row
@@ -256,7 +268,7 @@ def write_contacts(filename, people_by_name):
                 # print("converting", multi, row[multi])
                 row[multi] = '; '.join(sorted(list(row[multi])))
                 # print("converted", multi, row[multi])
-            for deledend in ('', '_name_', '_groups_'):
+            for deledend in ('', '_name_', '_initialled_name_', '_groups_'):
                 if deledend in row:
                     del row[deledend]
             try:
