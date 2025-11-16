@@ -81,7 +81,11 @@ class Storer:
         The token is currently assumed to be number, typically from a barcode scanner.
 
         If it is in the range indicating a storage location, subsequent tokens will
-        be recorded as stored in that location."""
+        be recorded as stored in that location.
+
+        Returns whether the item collection, the book collection, and
+        the location collection were modified.
+        """
         if token in ('book', 'books', 'item', 'items'):
             self.current_type = token[0:4]
             return False, False, False
@@ -135,6 +139,9 @@ class Storer:
                     self.last_enclosed['ContainedWithin'] = self.last_enclosing_previous_location
                     self.last_enclosing_previous_location = None
                 if self.current_type == 'book':
+                    if token not in self.books:
+                        print("Warning: No book with identity", token)
+                        return False, False, False
                     if self.verbose:
                         print("storing book %s (%s) in location %s (%s)" % (
                             self.books[token]['Title'], token,
@@ -142,6 +149,9 @@ class Storer:
                     store_book(self.books, token, self.current_location)
                     return False, True, False
                 else:
+                    if token not in self.items:
+                        print("Warning: No item with identity", token)
+                        return False, False, False
                     if self.verbose:
                         print("storing item %s (%s) in location %s (%s)" % (
                             self.items[token]['Item'], token,
