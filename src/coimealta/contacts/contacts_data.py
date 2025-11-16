@@ -21,7 +21,7 @@ fieldnames = ['Given name', 'Middle names', 'Surname', 'Title', 'Old name', 'AKA
               'Flags',
               'Nationality', 'Place met',
               'Group Membership', 'Other groups', 'Organizations',
-              'Universities', 'Subjects', 'Jobs',
+              'Universities', 'College', 'Subjects', 'Jobs',
               'Primary email', 'Other emails',
               'Primary phone Type', 'Primary phone Value',
               'Secondary phone Type', 'Secondary phone Value',
