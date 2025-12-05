@@ -167,6 +167,7 @@ class StorageShell(cmd.Cmd):
                  locations_file, locations,
                  items_file, items,
                  books_file, books,
+                 stock_file, stock,
                  verbose=False):
         super().__init__()
         self.outstream = outstream
@@ -176,6 +177,8 @@ class StorageShell(cmd.Cmd):
         self.items = items
         self.books_file = books_file
         self.books = books
+        self.stock_file = stock_file
+        self.stock = stock
         self.verbose = verbose
 
     def postcmd(self, stop, _line):
@@ -431,6 +434,23 @@ def read_inventory(inventory_file, key='Label number'):
                                      empty_for_missing=True,
                                      transform_row=normalize_item_entry)
 
+def normalize_stock_entry(row):
+    """Put an item entry into our standard form."""
+    global unlabelled
+    normal_location = row['Normal location']
+    row['Normal location'] = (int(normal_location)
+                              if isinstance(normal_location, str) and re.match("[0-9]+", normal_location)
+                              else 0)
+    return row
+
+def read_stock(stock_file='item'):
+    """Read a stock file."""
+    return dobishem.storage.read_csv(stock_file,
+                                     result_type=dict,
+                                     row_type=dict,
+                                     key_column=['Item', 'Subtype'],
+                                     empty_for_missing=True,
+                                     transform_row=normalize_stock_entry)
 # Description for reading these files using client_server.py:
 # ('Label number', normalize_item_entry)
 
@@ -628,6 +648,8 @@ def storage_server_function(in_string, files_data):
             items=items_data,
             books_file=filenames['books'],
             books=files_data[filenames['books']],
+            stock_file=filenames['stock'],
+            stock=files_data[filenames['stock']],
         ).onecmd(in_string)
         return output_catcher.getvalue()
     else:
@@ -720,6 +742,8 @@ def storage(locations,
                                        items=read_inventory(inventory),
                                        books_file=books,
                                        books=read_books(books),
+                                       stock_file=stock,
+                                       stock=read_stock(stock),
                                        verbose=verbose)
         if cli:
             command_handler.cmdloop()
