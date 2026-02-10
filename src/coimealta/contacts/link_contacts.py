@@ -3,7 +3,7 @@
 import argparse
 import re
 import coimealta.contacts.contacts_data as contacts_data
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 def offspring(person):
     return person['Offspring']
@@ -54,9 +54,6 @@ def name(person):
     # return person['_name_']
     return person.get('_name_', person.get('Given name') + " " + person.get('Surname'))
 
-def accumulate(person, aspect, by_aspect):
-    by_aspect[person[aspect]].append(person['ID'])
-
 def print_summary(by_aspect, label):
     by_frequency = {}
     for k, v in by_aspect.items():
@@ -76,6 +73,11 @@ def analyze_contacts(by_id):
     by_title = defaultdict(list)
     by_place_met = defaultdict(list)
     flagged = defaultdict(list)
+    given_names_by_gender = defaultdict(lambda:defaultdict(list))
+
+    def accumulate(person, aspect, by_aspect):
+        by_aspect[person[aspect]].append(person['ID'])
+
     for id, person in by_id.items():
         accumulate(person, 'Nationality', by_nationality)
         accumulate(person, 'Gender', by_gender)
@@ -83,12 +85,14 @@ def analyze_contacts(by_id):
         accumulate(person, 'Place met', by_place_met)
         for flag in person.get('Flags', "") or "":
             flagged[flag].append(person['ID'])
+        given_names_by_gender[person['Gender']][person['Given name']].append(person)
     return {
         "n_people": len(by_id),
         "by_gender": by_gender,
         "by_nationality": by_nationality,
         "by_place_met": by_place_met,
         "by_title": by_title,
+        "by_given_names": given_names_by_gender,
         "ordained": contacts_data.count_grouped_titles(by_title, ["Revd", "Revd Dr", "Revd Prof", "RtRevd"]),
         "doctored": contacts_data.count_grouped_titles(by_title, ["Dr", "Revd Dr", "Prof", "Revd Prof", "MD"]),
         "flagged": flagged
