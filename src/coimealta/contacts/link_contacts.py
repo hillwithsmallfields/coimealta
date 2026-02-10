@@ -51,7 +51,8 @@ def find_siblings(person, by_id):
     return sibs
 
 def name(person):
-    return person['_name_']
+    # return person['_name_']
+    return person.get('_name_', person.get('Given name') + " " + person.get('Surname'))
 
 def accumulate(person, aspect, by_aspect):
     by_aspect[person[aspect]].append(person['ID'])
@@ -89,7 +90,7 @@ def analyze_contacts(by_id):
         "by_place_met": by_place_met,
         "by_title": by_title,
         "ordained": contacts_data.count_grouped_titles(by_title, ["Revd", "Revd Dr", "Revd Prof", "RtRevd"]),
-        "doctored": contacts_data.count_grouped_titles(by_title, ["Dr", "Revd Dr", "Prof", "Revd Prof"]),
+        "doctored": contacts_data.count_grouped_titles(by_title, ["Dr", "Revd Dr", "Prof", "Revd Prof", "MD"]),
         "flagged": flagged
     }
 
@@ -119,28 +120,63 @@ def link_contacts(by_id, by_name):
                 partner['Partners'].add(person_id)
         for parent_id in person['Parents']:
             if parent_id not in by_id:
-                print(person.get('_name_', person), "has an unlisted parent", parent_id)
+                print(name(person), "has an unlisted parent", parent_id)
                 continue
             parent = by_id[parent_id]
             if person_id not in parent['Offspring']:
+                print("Adding", name(person), "to children of", name(parent))
                 parent['Offspring'].add(person_id)
         for offspring_id in person['Offspring']:
             if offspring_id not in by_id:
-                print(person.get('_name_', person), "has an unlisted child", offspring_id)
+                print(name(person), "has an unlisted child", offspring_id)
                 continue
             child = by_id[offspring_id]
             if person_id not in child['Parents']:
+                print("Adding", name(child), "to parents of", name(person))
                 child['Parents'].add(person_id)
         for sibling_id in find_siblings(person, by_id):
             if sibling_id not in by_id:
-                print(person.get('_name_', person), "has an unlisted sibling", sibling_id)
+                print(name(person), "has an unlisted sibling", sibling_id)
                 continue
             sibling = by_id[sibling_id]
             if person_id not in sibling['Siblings']:
+                print("Adding", name(sibling), "to siblings of", name(person))
                 sibling['Siblings'].add(person_id)
         # todo: mutualize contacts
 
     return by_name
+
+def write_graph(graph, people_by_id):
+    at_least_partners = 2   # don't list couples, but list any more complex arrangements
+    mentioned = set()
+    with open(graph, 'w') as g:
+        g.write("digraph {\n")
+        g.write("  rankdir=LR\n")
+        for uid, person in people_by_id.items():
+            their_partners = person['Partners']
+            their_offspring = person['Offspring']
+            their_parents = person['Parents']
+            if len(their_partners) >= at_least_partners or their_offspring or their_parents:
+                g.write("    %s -> {%s}\n" % (uid, ",".join(their_partners)))
+                mentioned.add(uid)
+                mentioned |= their_partners
+            if their_offspring:
+                g.write("    %s -> {%s} [style=dotted]\n" % (uid, ",".join(their_offspring)))
+                g.write("    {rank=same %s}\n" % " ".join(their_offspring))
+                mentioned.add(uid)
+                mentioned |= their_offspring
+            if their_parents:
+                g.write("    %s -> {%s} [style=dashed]\n" % (uid, ",".join(their_parents)))
+                mentioned.add(uid)
+                mentioned |= their_parents
+        for who in mentioned:
+            person = people_by_id[who]
+            g.write('  %s [label="%s" shape="%s"]\n' % (who,
+                                                        name(person),
+                                                        ("box" if person['Gender'] == 'm' else "diamond")))
+            if (partners := person.get('partners')):
+                g.write("    {rank=same %s %s}\n" % (who, " ".join(partners)))
+        g.write("}")
 
 def link_contacts_main(input_file, analyze, graph, output_file):
 
@@ -152,27 +188,11 @@ def link_contacts_main(input_file, analyze, graph, output_file):
 
     link_contacts(by_id, by_name)
 
-    contacts_data.write_contacts(output_file, by_name)
-
     if graph:
-        print("digraph {")
-        for uid, person in by_id.items():
-            their_partners = person['Partners']
-            their_offspring = person['Offspring']
-            their_parents = person['Parents']
-            if len(their_partners) > 0 or len(their_offspring) > 0 or len(their_parents) > 0:
-                print("  ", uid,
-                      ('[label="' + person['_name_']
-                       + '" shape=' + ("box" if person['Gender'] == 'm' else "diamond") + "]"))
-            if their_partners:
-                print("    ", uid, "->", "{", ",".join(their_partners), "}")
-                print("    {rank=same", uid, " ".join(their_partners), "}")
-            if their_offspring:
-                print("    ", uid, "->", "{", ",".join(their_offspring), "} [style=dotted]")
-                print("    {rank=same", " ".join(their_offspring), "}")
-            if their_parents:
-                print("    ", uid, "->", "{", ",".join(their_parents), "} [style=dashed]")
-        print("}")
+        write_graph(graph, by_id)
+
+    # don't do this until after the graph, as this rewrites groups back to strings
+    contacts_data.write_contacts(output_file, by_name)
 
     if analyze:
         analysis = analyze_contacts(by_id)
@@ -193,7 +213,7 @@ def link_contacts_main(input_file, analyze, graph, output_file):
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--analyze", action='store_true')
-    parser.add_argument("--graph", action='store_true')
+    parser.add_argument("--graph")
     parser.add_argument("input_file")
     parser.add_argument("output_file")
     return vars(parser.parse_args())
