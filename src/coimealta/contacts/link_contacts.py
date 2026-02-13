@@ -67,6 +67,53 @@ def print_summary(by_aspect, label):
              for bf in sorted(by_frequency[freq], key=lambda x: x if x else "")])
           for freq in reversed(sorted(by_frequency.keys()))]))
 
+EXPANDED_NAMES = {
+    "Abi": "Abigail",
+    "Ander": "Alexander",
+    "Andy": "Andrew",
+    "Ben": "Benjamin",
+    "Bill": "William",
+    "Chris": "Christopher",
+    "Dan": "Daniel",
+    "Danny": "Daniel",
+    "Dave": "David",
+    "Debbie": "Deborah",
+    "Elpie": "Elspeth",
+    "Frank": "Francis",
+    "Ginny": "Virginia",
+    "Greg": "Gregory",
+    "Jen": "Jennifer",
+    "Jennie": "Jennifer",
+    "Jenny": "Jennifer",
+    "Jim": "James",
+    "Kate": "Catherine",
+    "Katherine": "Catherine",
+    "Liz": "Elizabeth",
+    "Lizzi": "Elizabeth",
+    "Mat": "Matthew",
+    "Mathew": "Matthew",
+    "Matt": "Matthew",
+    "Meg": "Margaret",
+    "Nick": "Nicholas",
+    "Ollie": "Oliver",
+    "Olly": "Oliver",
+    "Pete": "Peter",
+    "Phillip": "Philip",
+    "Pip": "Philip",
+    "Pippa": "Philippa",
+    "Rob": "Robert",
+    "Ros": "Rosalind",
+    "Sam": "Samuel",
+    "Steven": "Stephen",
+    "Stevn": "Stephen",
+    "Sue": "Susan",
+    "Tim": "Timothy",
+    "Tom": "Thomas",
+    "Tony": "Anthony",
+    "Vicky": "Victoria",
+    "Will": "William",
+}
+
 def analyze_contacts(by_id):
     by_nationality = defaultdict(list)
     by_gender = defaultdict(list)
@@ -78,6 +125,9 @@ def analyze_contacts(by_id):
     def accumulate(person, aspect, by_aspect):
         by_aspect[person[aspect]].append(person['ID'])
 
+    def expand_name(as_given):
+        return EXPANDED_NAMES.get(as_given, as_given)
+
     for id, person in by_id.items():
         accumulate(person, 'Nationality', by_nationality)
         accumulate(person, 'Gender', by_gender)
@@ -85,7 +135,7 @@ def analyze_contacts(by_id):
         accumulate(person, 'Place met', by_place_met)
         for flag in person.get('Flags', "") or "":
             flagged[flag].append(person['ID'])
-        given_names_by_gender[person['Gender']][person['Given name']].append(person)
+        given_names_by_gender[person['Gender']][expand_name(person['Given name'])].append(person)
     return {
         "n_people": len(by_id),
         "by_gender": by_gender,
