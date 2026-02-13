@@ -69,6 +69,8 @@ def print_summary(by_aspect, label):
 
 EXPANDED_NAMES = {
     "Abi": "Abigail",
+    "Anne": "Ann",
+    "Ana": "Anna",
     "Ander": "Alexander",
     "Andy": "Andrew",
     "Ben": "Benjamin",
@@ -89,7 +91,7 @@ EXPANDED_NAMES = {
     "Kate": "Catherine",
     "Katherine": "Catherine",
     "Liz": "Elizabeth",
-    "Lizzi": "Elizabeth",
+    "Lizzie": "Elizabeth",
     "Mat": "Matthew",
     "Mathew": "Matthew",
     "Matt": "Matthew",
