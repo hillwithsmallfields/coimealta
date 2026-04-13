@@ -19,6 +19,7 @@ def main():
     parser.add_argument("-s", "--surname", action='append')
     parser.add_argument("-G", "--given", action='append')
     parser.add_argument("-N", "--no-add-family",
+                        action='store_true',
                         help="""Without this option, if someone is selected but their partner
                         or children aren't, those are added automatically to the selection.""")
     parser.add_argument("-p", "--postal-addresses",
@@ -56,10 +57,12 @@ def main():
         if not args.no_add_family:
             invited_ids = [whoever['ID'] for whoever in selected]
             for whoever in selected:
+                print("whoever", whoever)
                 for partner in whoever['Partners']:
                     if partner not in invited_ids:
                         # todo: make this only if they are at the same address
                         selected.append(by_id[partner])
+                        print("  partner", partner)
             for whoever in selected:
                 for offspring in whoever['Offspring']:
                     if offspring not in invited_ids:
