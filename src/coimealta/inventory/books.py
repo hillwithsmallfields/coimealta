@@ -38,20 +38,20 @@ def main():
                         countdown = countdown - 1
                         new_isbn = isbnlib.to_isbn13(isbnlib.canonical(isbn))
                         if new_isbn is None or new_isbn == "":
-                            print "Could not canonicalize isbn", isbn
+                            print("Could not canonicalize isbn", isbn)
                         else:
                             row['ISBN'] = new_isbn
                         details = None
                         try:
                             details = isbnlib.meta(isbn)
                         except isbnlib.dev._exceptions.NoDataForSelectorError:
-                            print "No data for ISBN", isbn, "title", row.get('Title', "Unknown")
+                            print("No data for ISBN", isbn, "title", row.get('Title', "Unknown"))
                             row['webchecked'] = "No data for ISBN"
                         except isbnlib._exceptions.NotValidISBNError:
-                            print "Invalid ISBN", isbn, "for", row['Title']
+                            print("Invalid ISBN", isbn, "for", row['Title'])
                             row['webchecked'] = "Invalid ISBN"
                         except isbnlib.dev._exceptions.ISBNNotConsistentError:
-                            print "Inconsistent data for",  row['Title']
+                            print("Inconsistent data for",  row['Title'])
                             row['webchecked'] = "Inconsistent ISBN data"
                         if details:
                             if details.get('ISBN-13', "") != "" and row.get('ISBN', "") == "":
@@ -67,9 +67,9 @@ def main():
                                 web_len = len(web_canon)
                                 if ((web_len > old_len and old_canon in web_canon)
                                     or (web_len == old_len and old_canon == web_canon)):
-                                    print "Title improvement from", old_title, "to", web_title
+                                    print("Title improvement from", old_title, "to", web_title)
                                 else:
-                                    print "Title discrepancy:", old_title, "in file,", web_title, "found online"
+                                    print("Title discrepancy:", old_title, "in file,", web_title, "found online")
                                     details['Title'] = old_title
                             # don't use 'update', because we don't want to drag in random other fields that dictwriter will then object to
                             for key in fieldnames:
