@@ -5,6 +5,8 @@ import operator
 import os
 import random
 import re
+import shutil
+import tempfile
 
 def count_grouped_titles(title_map, titles):
     """Count people with titles in a list of titles."""
@@ -143,7 +145,7 @@ def last_contacted(person):
     if not cday_string:
         return None
     try:
-        cday = datetime.date.fromisoformat(cday_string)
+        return datetime.date.fromisoformat(cday_string)
     except:
         match = re.search("([0-9][0-9][0-9][0-9])-([0-9][0-9])", cday_string)
         if match:
@@ -151,16 +153,9 @@ def last_contacted(person):
             if year == 0:
                 return False
             month = int(match.group(2))
-            if month == 0:
-                month = 1
-            cday = datetime.date(year=year, month=month, day=1)
-        else:
-            match = re.search("([0-9][0-9][0-9][0-9])", cday_string)
-            if match:
-                cday = datetime.date(year=int(match.group(1)), month=1, day=1)
-            else:
-                return None
-    return cday
+            return datetime.date(year=year, month=month if month > 0 else 1, day=1)
+        match = re.search("([0-9][0-9][0-9][0-9])", cday_string)
+        return datetime.date(year=int(match.group(1)), month=1, day=1) if match else None
 
 def contact_soon(person, today, days_since_last_contact=90):
     """Return whether I haven't registered a contact with someone in a given time."""
@@ -176,6 +171,7 @@ def record_contact(person, date=None):
     set_field_if_not_empty(person, "keep-in-touch", date)
 
 def age_string(person, year):
+    """Return a person's age, as a string."""
     age = age_in_year(person, year)
     return str(age) if age else "?"
 
@@ -254,11 +250,17 @@ def read_contacts(filename):
     return people_by_id, people_by_name
 
 def write_contacts(filename, people_by_name):
-    """Write a dictionary of contacts-by-name to a file."""
+    """Write a dictionary of contacts-by-name to a file.
+
+    The data is written to a temporary file, and only copied to the
+    specified file if there were no unwritable entries.
+    """
     all_found_fields = set().union(*[set(row.keys()) for row in people_by_name.values()])
     if all_found_fields != set(fieldnames):
         print("These extra fields were found:", all_found_fields - set(fieldnames))
-    with open(os.path.expandvars(filename), 'w') as output:
+    with open(tempfile.NamedTemporaryFile(delete_on_close=False, suffix='.csv'), 'w') as output:
+        tempname = output.name
+        fails = 0
         contacts_writer = csv.DictWriter(output, fieldnames)
         contacts_writer.writeheader()
         for name in sorted(people_by_name.keys()):
@@ -273,5 +275,9 @@ def write_contacts(filename, people_by_name):
                     del row[deledend]
             try:
                 contacts_writer.writerow(row)
-            except ValueError:
-                print("Unwritable row: ", row)
+            except ValueError as ve:
+                fails += 1
+                print("Unwritable row: ", row, "because of", ve)
+    if fails == 0:
+        shutil.copyfile(tempname, os.path.expandvars(filename))
+        os.unlink(tempname)
