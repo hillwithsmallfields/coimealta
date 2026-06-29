@@ -277,7 +277,7 @@ def write_contacts(filename, people_by_name):
                 contacts_writer.writerow(row)
             except ValueError as ve:
                 fails += 1
-                print("Unwritable row: ", row, "because of", ve)
+                print("Unwritable row:", row, "because of", ve)
     if fails == 0:
         shutil.copyfile(tempname, os.path.expandvars(filename))
         os.unlink(tempname)
