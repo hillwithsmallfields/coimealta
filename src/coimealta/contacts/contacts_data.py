@@ -1,3 +1,7 @@
+"""Read, access, handle, and write data describing contacts.
+
+The data is stored in a CSV file."""
+
 import csv
 import datetime
 import functools
@@ -13,7 +17,7 @@ def count_grouped_titles(title_map, titles):
     return functools.reduce(operator.add,
                             [len(title_map[title]) for title in titles])
 
-fieldnames = ['Given name', 'Middle names', 'Surname', 'Title', 'Old name', 'AKA',
+FIELD_NAMES = ['Given name', 'Middle names', 'Surname', 'Title', 'Old name', 'AKA',
               'Birthday', 'Died',
               'First contact', 'In touch',
               'Gender',
@@ -31,7 +35,7 @@ fieldnames = ['Given name', 'Middle names', 'Surname', 'Title', 'Old name', 'AKA
               'Postal Code', 'Country', 'Extended Address']
 
 # Fields to split into lists
-multi_fields = ['Parents', 'Offspring', 'Siblings',
+MULTI_FIELDS = ['Parents', 'Offspring', 'Siblings',
                 'Partners', 'Ex-partners',
                 'Knows',
                 'Group Membership',
@@ -66,14 +70,16 @@ def make_short_name(person):
                     + [(person.get('Surname', "") or "")])
 
 def string_list_with_and(items):
+    """Return a comma-joined list of items using 'and' as I think appropriate."""
     return (", ".join(items[:-1])
             + ", and "
             + items[-1] if len(items) > 2 else items[0]
             + " and "
             + items[1] if len(items) == 2 else items[0])
 
-# todo: sort residents to bring oldest (or most ancestral) to the start
+# TODO: sort residents to bring oldest (or most ancestral) to the start
 def names_string(people):
+    """Return a string representing the names of several people."""
     by_surname = {}
     for person in people:
         surname = person.get('Surname', "")
@@ -109,26 +115,24 @@ def age_in_year(person, year):
     return (year - int(match.group(0))) if match else None
 
 def birthday(person, this_year):
-    """Return this year's birthday of a person, as a datetime.date."""
+    """Return this year's birthday of a person, as a datetime.date.
+    Returns None if their birthday is unknown or not in a recognised format."""
     bday_string = person.get('Birthday', "") or ""
     if bday_string == "":
-        return False
+        return None
     try:
-        bday = datetime.date.fromisoformat(bday_string)
-    except Exception:
+        return datetime.date.fromisoformat(bday_string).replace(year=this_year)
+    except ValueError:          # not a full ISOdate, try some subsets:
         match = re.search("-([0-9][0-9])-([0-9][0-9])", bday_string)
         if match:
             month = int(match.group(1))
             if month == 0:
-                return False
+                return None
             day = int(match.group(2))
             if day == 0:
-                return False
-            bday = datetime.date(year=this_year, month=month, day=day)
-        else:
-            return False
-    bday = bday.replace(year=this_year)
-    return bday
+                return None
+            return datetime.date(year=this_year, month=month, day=day).replace(year=this_year)
+        return None
 
 def birthday_soon(person, this_year, today, within_days=30):
     """Return whether a person has a birthday soon."""
@@ -136,7 +140,7 @@ def birthday_soon(person, this_year, today, within_days=30):
     if not bday:
         return False
     interval_to_birthday = (bday - today).days
-    return interval_to_birthday >= 0 and interval_to_birthday < within_days
+    return 0 <= interval_to_birthday < within_days
 
 def last_contacted(person):
     """Return when I was last in touch with a person, or None if not recorded.
@@ -146,7 +150,7 @@ def last_contacted(person):
         return None
     try:
         return datetime.date.fromisoformat(cday_string)
-    except:
+    except ValueError:          # not a full ISOdate, try some subsets:
         match = re.search("([0-9][0-9][0-9][0-9])-([0-9][0-9])", cday_string)
         if match:
             year = int(match.group(1))
@@ -230,7 +234,7 @@ def read_contacts(filename):
                 people_by_id[uid] = row
             else:
                 without_id.append(row)
-            for multi in multi_fields:
+            for multi in MULTI_FIELDS:
                 row[multi] = set(
                     item.strip()
                     for item in
@@ -256,17 +260,17 @@ def write_contacts(filename, people_by_name):
     specified file if there were no unwritable entries.
     """
     all_found_fields = set().union(*[set(row.keys()) for row in people_by_name.values()])
-    if all_found_fields != set(fieldnames):
-        print("These extra fields were found:", all_found_fields - set(fieldnames))
+    if all_found_fields != set(FIELD_NAMES):
+        print("These extra fields were found:", all_found_fields - set(FIELD_NAMES))
     with open(tempfile.NamedTemporaryFile(delete_on_close=False, suffix='.csv'), 'w') as output:
         tempname = output.name
         fails = 0
-        contacts_writer = csv.DictWriter(output, fieldnames)
+        contacts_writer = csv.DictWriter(output, FIELD_NAMES)
         contacts_writer.writeheader()
         for name in sorted(people_by_name.keys()):
             row = people_by_name[name]
             # print row
-            for multi in multi_fields:
+            for multi in MULTI_FIELDS:
                 # print("converting", multi, row[multi])
                 row[multi] = '; '.join(sorted(list(row[multi])))
                 # print("converted", multi, row[multi])

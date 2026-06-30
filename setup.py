@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="coimealta",
-    version="0.0.15",
+    version="0.0.16",
     description="A keeper for information about inventory and contacts.",
     long_description="""
     A keeper for information about inventory and contacts.
